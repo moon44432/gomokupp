@@ -2,6 +2,8 @@
 from math import sqrt
 from hparams import pv_evaluate_cnt
 from network import DN_INPUT_SHAPE
+from keras.models import load_model
+import multiprocessing
 import numpy as np
 
 
@@ -77,6 +79,7 @@ def pv_mcts_scores(model, state, temperature):
         root_node.evaluate()
 
     scores = nodes_to_scores(root_node.child_nodes)
+
     if temperature == 0:
         action = np.argmax(scores)
         scores = np.zeros(len(scores))

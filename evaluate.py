@@ -1,11 +1,12 @@
 
 from tensorflow.keras.models import load_model
-from tensorflow.keras import backend as K
+from keras import backend as K
 from shutil import copy
 from game import State
 from mcts import pv_mcts_action
 from tqdm import tqdm
-from hparams import EN_GAME_COUNT, EN_TEMPERATURE, EN_AVERAGE_POINT
+from hparams import EN_GAME_COUNT, EN_TEMPERATURE, EN_AVERAGE_POINT, EN_NUM_CORES
+import multiprocessing
 
 
 def first_player_point(end_state):
@@ -34,30 +35,39 @@ def update_best_player():
     print('Updating best player...')
 
 
-def evaluate_network():
+def do_evaluate(num):
     model0 = load_model('./model/latest.h5')
     model1 = load_model('./model/best.h5')
 
     next_action0 = pv_mcts_action(model0, EN_TEMPERATURE)
     next_action1 = pv_mcts_action(model1, EN_TEMPERATURE)
     next_actions = (next_action0, next_action1)
-
     total_point = 0
-    for i in tqdm(range(EN_GAME_COUNT)):
+
+    cnt = int(EN_GAME_COUNT / EN_NUM_CORES)
+    for i in tqdm(range(cnt)):
         if i % 2 == 0:
             total_point += play(next_actions)
         else:
             total_point += 1 - play(list(reversed(next_actions)))
 
-        print('\rEvaluating... ({}/{})'.format(i + 1, EN_GAME_COUNT), end='')
-    print('')
-
-    average_point = total_point / EN_GAME_COUNT
-    print('Average point: ', average_point)
-
     K.clear_session()
     del model0
     del model1
+
+    return total_point
+
+
+def evaluate_network():
+    pool = multiprocessing.Pool(processes=EN_NUM_CORES)
+    total = pool.map(do_evaluate, range(EN_NUM_CORES))
+    pool.close()
+    pool.join()
+    total_point = sum(total)
+    print(total, total_point)
+
+    average_point = total_point / (int(EN_GAME_COUNT / EN_NUM_CORES) * EN_NUM_CORES)
+    print('Average point: ', average_point)
 
     if average_point > EN_AVERAGE_POINT:
         update_best_player()

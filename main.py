@@ -4,19 +4,12 @@ from game import State
 from mcts import pv_mcts_action
 import tensorflow as tf
 
-gpus = tf.config.experimental.list_physical_devices('GPU')
-if gpus:
-    try:
-        tf.config.experimental.set_memory_growth(gpus[0], True)
-    except RuntimeError as e:
-        # 프로그램 시작시에 메모리 증가가 설정되어야만 합니다
-        print(e)
-
+tf.config.set_visible_devices([], 'GPU')
 
 class Game:
     def __init__(self, model=None):
         self.state = State()
-        self.next_action = pv_mcts_action(model, 0.1)
+        self.next_action = pv_mcts_action(model, 0.05)
 
     def turn_of_human(self):
         x, y = input('A~O 1~15 형태로 입력: ').split()

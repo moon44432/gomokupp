@@ -1,7 +1,7 @@
 
-from tensorflow.keras.callbacks import LearningRateScheduler, LambdaCallback
-from tensorflow.keras.models import load_model
-from tensorflow.keras import backend as K
+from keras.callbacks import LearningRateScheduler, LambdaCallback
+from keras.models import load_model
+from keras import backend as K
 from pathlib import Path
 from network import DN_INPUT_SHAPE
 from hparams import rn_epochs, batch_size

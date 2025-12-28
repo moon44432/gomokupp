@@ -57,13 +57,13 @@ def generate_record_list():
     record_list = []
 
     for game in tqdm(root):
-        if game.find("winby").text == "five":
-            record = game.find("board").text
-            if '--' in record:
-                continue
-            else:
-                record_list.append(get_record_str(record))
-                cnt += 1
+        record = game.find("board").text
+        if record is None or '--' in record or len(record) < 150:
+            continue
+        else:
+            record_list.append(get_record_str(record))
+            cnt += 1
+
         if cnt == max_record_cnt:
             break
 

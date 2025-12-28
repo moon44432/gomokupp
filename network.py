@@ -1,8 +1,9 @@
-import tensorflow.keras
-from tensorflow.keras.layers import Activation, BatchNormalization, Conv2D, Dense, GlobalAveragePooling2D, Input
-from tensorflow.keras.models import Model
-from tensorflow.keras.regularizers import l2
-from tensorflow.keras import backend as K
+
+
+from keras.layers import Activation, BatchNormalization, Conv2D, Dense, GlobalAveragePooling2D, Input
+from keras.models import Model
+from keras.regularizers import l2
+from keras import backend as K
 from hparams import board_width, dn_filters, dn_kernel_size, dn_block_num
 import os
 

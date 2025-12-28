@@ -1,13 +1,14 @@
 
-from tensorflow.keras.models import load_model
-from tensorflow.keras import backend as K
+from keras.models import load_model
+from keras import backend as K
 from game import State
 from mcts import pv_mcts_scores
 from network import DN_OUTPUT_SIZE
 from generate_data import first_player_value, write_data
-from hparams import sp_temperature, sp_game_cnt
+from hparams import sp_temperature, sp_game_cnt, sp_num_cores
 from tqdm import tqdm
 import numpy as np
+import multiprocessing
 
 
 def play(model):
@@ -16,7 +17,6 @@ def play(model):
     turn_cnt = 1
 
     while True:
-        print('  Turn {:d}'.format(turn_cnt))
         turn_cnt += 1
 
         if state.is_done():
@@ -43,18 +43,29 @@ def play(model):
     return history
 
 
-def self_play():
+def do_self_play(num):
     history = []
     model = load_model('./model/best.h5')
 
-    for i in tqdm(range(sp_game_cnt)):
-        print('\rSelf play {}/{}'.format(i + 1, sp_game_cnt), end='')
-
+    cnt = int(sp_game_cnt / sp_num_cores)
+    for _ in tqdm(range(cnt)):
         h = play(model)
         history.extend(h)
 
-    print('')
-    write_data(history)
-
     K.clear_session()
     del model
+    return history
+
+
+def self_play():
+    pool = multiprocessing.Pool(processes=sp_num_cores)
+    history_list = pool.map(do_self_play, range(sp_num_cores))
+    pool.close()
+    pool.join()
+
+    history = []
+
+    for h in history_list:
+        history += h
+
+    write_data(history)
