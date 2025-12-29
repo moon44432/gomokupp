@@ -1,8 +1,6 @@
-
-from keras.models import load_model
-from keras import backend as K
+import torch
 from game import State
-from mcts import pv_mcts_scores
+from mcts import pv_mcts_scores, ModelServer
 from network import DN_OUTPUT_SIZE
 from generate_data import first_player_value, write_data
 from hparams import sp_temperature, sp_game_cnt, sp_num_cores
@@ -11,7 +9,8 @@ import numpy as np
 import multiprocessing
 
 
-def play(model):
+def play(model_server):
+    """Play a single game using the shared model server"""
     history = []
     state = State()
     turn_cnt = 1
@@ -22,7 +21,7 @@ def play(model):
         if state.is_done():
             break
 
-        scores = pv_mcts_scores(model, state, sp_temperature)
+        scores = pv_mcts_scores(model_server, state, sp_temperature)
 
         policies = [0] * DN_OUTPUT_SIZE
         for action, policy in zip(state.legal_actions(), scores):
@@ -43,28 +42,38 @@ def play(model):
     return history
 
 
-def do_self_play(num):
+def do_self_play(args):
+    """Worker function for self-play with shared model server"""
+    num, model_path = args
+    
+    # Create a model server for this worker
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    model_server = ModelServer(model_path, device=device, batch_size=8)
+    
     history = []
-    model = load_model('./model/best.h5')
-
     cnt = int(sp_game_cnt / sp_num_cores)
-    for _ in tqdm(range(cnt)):
-        h = play(model)
+    
+    for _ in tqdm(range(cnt), position=num, desc=f"Worker {num}"):
+        h = play(model_server)
         history.extend(h)
-
-    K.clear_session()
-    del model
+    
+    model_server.close()
     return history
 
 
 def self_play():
-    pool = multiprocessing.Pool(processes=sp_num_cores)
-    history_list = pool.map(do_self_play, range(sp_num_cores))
-    pool.close()
-    pool.join()
-
+    """Main self-play function using optimized parallelization"""
+    model_path = './model/best.pth'
+    
+    # Prepare arguments for workers
+    worker_args = [(i, model_path) for i in range(sp_num_cores)]
+    
+    # Use multiprocessing pool
+    with multiprocessing.Pool(processes=sp_num_cores) as pool:
+        history_list = pool.map(do_self_play, worker_args)
+    
+    # Combine all histories
     history = []
-
     for h in history_list:
         history += h
 

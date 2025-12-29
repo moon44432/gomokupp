@@ -1,9 +1,8 @@
-
-from tensorflow.keras.models import load_model
-from keras import backend as K
+import torch
 from shutil import copy
 from game import State
-from mcts import pv_mcts_action
+from mcts import pv_mcts_action, ModelServer
+from network import load_model
 from tqdm import tqdm
 from hparams import EN_GAME_COUNT, EN_TEMPERATURE, EN_AVERAGE_POINT, EN_NUM_CORES
 import multiprocessing
@@ -31,38 +30,48 @@ def play(next_actions):
 
 
 def update_best_player():
-    copy('./model/latest.h5', './model/best.h5')
+    copy('./model/latest.pth', './model/best.pth')
     print('Updating best player...')
 
 
-def do_evaluate(num):
-    model0 = load_model('./model/latest.h5')
-    model1 = load_model('./model/best.h5')
+def do_evaluate(args):
+    """Evaluate using shared model servers"""
+    num, latest_path, best_path = args
+    
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    
+    # Create model servers for batch inference
+    model_server0 = ModelServer(latest_path, device=device, batch_size=8)
+    model_server1 = ModelServer(best_path, device=device, batch_size=8)
 
-    next_action0 = pv_mcts_action(model0, EN_TEMPERATURE)
-    next_action1 = pv_mcts_action(model1, EN_TEMPERATURE)
+    next_action0 = pv_mcts_action(model_server0, EN_TEMPERATURE)
+    next_action1 = pv_mcts_action(model_server1, EN_TEMPERATURE)
     next_actions = (next_action0, next_action1)
     total_point = 0
 
     cnt = int(EN_GAME_COUNT / EN_NUM_CORES)
-    for i in tqdm(range(cnt)):
+    for i in tqdm(range(cnt), position=num, desc=f"Eval {num}"):
         if i % 2 == 0:
             total_point += play(next_actions)
         else:
             total_point += 1 - play(list(reversed(next_actions)))
 
-    K.clear_session()
-    del model0
-    del model1
+    model_server0.close()
+    model_server1.close()
 
     return total_point
 
 
 def evaluate_network():
-    pool = multiprocessing.Pool(processes=EN_NUM_CORES)
-    total = pool.map(do_evaluate, range(EN_NUM_CORES))
-    pool.close()
-    pool.join()
+    latest_path = './model/latest.pth'
+    best_path = './model/best.pth'
+    
+    # Prepare arguments for workers
+    worker_args = [(i, latest_path, best_path) for i in range(EN_NUM_CORES)]
+    
+    with multiprocessing.Pool(processes=EN_NUM_CORES) as pool:
+        total = pool.map(do_evaluate, worker_args)
+    
     total_point = sum(total)
     print(total, total_point)
 

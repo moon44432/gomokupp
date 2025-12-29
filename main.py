@@ -1,15 +1,13 @@
-
-from tensorflow.keras.models import load_model
+import torch
+from network import load_model
 from game import State
-from mcts import pv_mcts_action
-import tensorflow as tf
+from mcts import pv_mcts_action, ModelServer
 
-tf.config.set_visible_devices([], 'GPU')
 
 class Game:
-    def __init__(self, model=None):
+    def __init__(self, model_server=None):
         self.state = State()
-        self.next_action = pv_mcts_action(model, 0.05)
+        self.next_action = pv_mcts_action(model_server, 0.05)
 
     def turn_of_human(self):
         x, y = input('A~O 1~15 형태로 입력: ').split()
@@ -38,11 +36,15 @@ class Game:
 
 
 if __name__ == '__main__':
-    # 베스트 플레이어 모델 로드
-    model = load_model('./model/best.h5')
+    # Set device
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print(f'Using device: {device}')
+    
+    # Create model server for efficient inference
+    model_server = ModelServer('./model/best.pth', device=device, batch_size=8)
 
     # 게임 UI 실행
-    f = Game(model=model)
+    f = Game(model_server=model_server)
 
     while True:
         f.state = State()

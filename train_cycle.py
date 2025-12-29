@@ -1,21 +1,18 @@
-
+import torch
 from network import dual_network
 from self_play import self_play
 from train_network import train_network
 from evaluate import evaluate_network
 from record_play import generate_record_list
 from record_play import record_play
-from hparams import record_batch_size, train_cycle, sess_memory_limit
-import tensorflow as tf
+from hparams import record_batch_size, train_cycle
 
-gpus = tf.config.experimental.list_physical_devices('GPU')
-if gpus:
-    try:
-        tf.config.experimental.set_virtual_device_configuration(gpus[0], [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=sess_memory_limit)])
-    except RuntimeError as e:
-        print(e)
 
 if __name__ == "__main__":
+    # Set device
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print(f'Using device: {device}')
+    
     dual_network()
 
     CALL_COUNT = 20
