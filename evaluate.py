@@ -4,7 +4,7 @@ from game import State
 from mcts import pv_mcts_action, ModelServer
 from network import load_model
 from tqdm import tqdm
-from hparams import EN_GAME_COUNT, EN_TEMPERATURE, EN_AVERAGE_POINT, EN_NUM_CORES
+from hparams import EN_GAME_COUNT, EN_TEMPERATURE, EN_AVERAGE_POINT, EN_NUM_CORES, EN_MCTS_COUNT
 import multiprocessing
 
 
@@ -14,8 +14,8 @@ def first_player_point(end_state):
     return 0.5
 
 
-def play(next_actions):
-    state = State()
+def play(next_actions, rule=None):
+    state = State(rule=rule)
 
     while True:
         if state.is_done():
@@ -44,17 +44,17 @@ def do_evaluate(args):
     model_server0 = ModelServer(latest_path, device=device, batch_size=8)
     model_server1 = ModelServer(best_path, device=device, batch_size=8)
 
-    next_action0 = pv_mcts_action(model_server0, EN_TEMPERATURE, rule)
-    next_action1 = pv_mcts_action(model_server1, EN_TEMPERATURE, rule)
+    next_action0 = pv_mcts_action(model_server0, EN_MCTS_COUNT, EN_TEMPERATURE)
+    next_action1 = pv_mcts_action(model_server1, EN_MCTS_COUNT, EN_TEMPERATURE)
     next_actions = (next_action0, next_action1)
     total_point = 0
 
     cnt = int(EN_GAME_COUNT / EN_NUM_CORES)
     for i in tqdm(range(cnt), position=num, desc=f"Eval {num}"):
         if i % 2 == 0:
-            total_point += play(next_actions)
+            total_point += play(next_actions, rule)
         else:
-            total_point += 1 - play(list(reversed(next_actions)))
+            total_point += 1 - play(list(reversed(next_actions)), rule)
 
     model_server0.close()
     model_server1.close()

@@ -3,6 +3,8 @@ import torch
 from network import load_model
 from game import State
 from mcts import pv_mcts_action, ModelServer
+from hparams import PLAY_MCTS_COUNT, PLAY_TEMPERATURE
+from rule import renju
 import threading
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
@@ -38,9 +40,9 @@ def new_game():
     
     with session_lock:
         game_sessions[session_id] = {
-            'state': State(),
+            'state': State(rule=renju),
             'player_color': player_color,
-            'next_action': pv_mcts_action(model_server, 0.05)
+            'next_action': pv_mcts_action(model_server, PLAY_MCTS_COUNT, PLAY_TEMPERATURE)
         }
     
     # If player chose white, AI makes first move

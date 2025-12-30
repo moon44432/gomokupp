@@ -2,12 +2,14 @@ import torch
 from network import load_model
 from game import State
 from mcts import pv_mcts_action, ModelServer
+from hparams import PLAY_TEMPERATURE, PLAY_MCTS_COUNT
+from rule import renju
 
 
 class Game:
-    def __init__(self, model_server=None):
-        self.state = State()
-        self.next_action = pv_mcts_action(model_server, 0.05)
+    def __init__(self, rule=None, model_server=None):
+        self.state = State(rule=rule)
+        self.next_action = pv_mcts_action(model_server, PLAY_MCTS_COUNT, PLAY_TEMPERATURE)
 
     def turn_of_human(self):
         x, y = input('A~O 1~15 형태로 입력: ').split()
@@ -44,10 +46,10 @@ if __name__ == '__main__':
     model_server = ModelServer('./model/best.pth', device=device, batch_size=8)
 
     # 게임 UI 실행
-    f = Game(model_server=model_server)
+    f = Game(model_server=model_server, rule=renju)
 
     while True:
-        f.state = State()
+        f.state = State(rule=renju)
         while True:
             f.turn_of_ai()
             if f.state.is_done():

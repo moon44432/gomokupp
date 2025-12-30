@@ -5,9 +5,6 @@
 board_width = 15
 count_len = 5
 
-# mcts
-pv_evaluate_cnt = 200
-
 # generate_record_list
 xml_path = 'training_data/games.xml'
 max_record_cnt = 150000
@@ -26,6 +23,7 @@ FROM_SELF_PLAY = True
 sp_game_cnt = 240
 sp_temperature = 0.1
 sp_num_cores = 12
+sp_mcts_count = 400
 
 # train_network
 rn_epochs = 20
@@ -36,7 +34,12 @@ record_batch_size = 500
 train_cycle = 100
 
 # evaluate_network
-EN_GAME_COUNT = 160  # 평가 1회 당 게임 수 (오리지널: 400)
+EN_GAME_COUNT = 240  # 평가 1회 당 게임 수 (오리지널: 400)
 EN_TEMPERATURE = 0.1  # 볼츠만 분포 온도
 EN_AVERAGE_POINT = 0.5
-EN_NUM_CORES = 8
+EN_NUM_CORES = 12
+EN_MCTS_COUNT = 400
+
+# play
+PLAY_TEMPERATURE = 0.02
+PLAY_MCTS_COUNT = 1000

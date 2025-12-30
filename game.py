@@ -7,6 +7,7 @@ class State:
     def __init__(self, pieces=None, enemy_pieces=None):
         self.pieces = pieces if pieces is not None else [0] * (board_width ** 2)
         self.enemy_pieces = enemy_pieces if enemy_pieces is not None else [0] * (board_width ** 2)
+        self.rule = None
 
     def count_piece(self, pieces):
         count = 0
@@ -42,9 +43,9 @@ class State:
         pieces[action] = 1
         return State(self.enemy_pieces, pieces)
 
-    def legal_actions(self, rule=None):
-        if rule is not None:
-            actions = rule(self)
+    def legal_actions(self):
+        if self.rule is not None:
+            actions = self.rule(self)
         else:
             actions = []
             for i in range(self.board_width ** 2):

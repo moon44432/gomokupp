@@ -1,7 +1,6 @@
 import torch
 import torch.multiprocessing as mp
 from math import sqrt
-from hparams import pv_evaluate_cnt
 from network import DN_INPUT_SHAPE
 import numpy as np
 import queue
@@ -127,7 +126,7 @@ def nodes_to_scores(nodes):
     return scores
 
 
-def pv_mcts_scores(model, state, temperature):
+def pv_mcts_scores(model, state, temperature, eval_cnt):
     class Node:
         def __init__(self, state, p):
             self.state = state
@@ -174,7 +173,7 @@ def pv_mcts_scores(model, state, temperature):
 
     root_node = Node(state, 0)
 
-    for _ in range(pv_evaluate_cnt):
+    for _ in range(eval_cnt):
         root_node.evaluate()
 
     scores = nodes_to_scores(root_node.child_nodes)
@@ -188,10 +187,10 @@ def pv_mcts_scores(model, state, temperature):
     return scores
 
 
-def pv_mcts_action(model, temperature=0, rule=None):
+def pv_mcts_action(model, eval_count, temperature=0):
     def pv_mcts_action(state):
-        scores = pv_mcts_scores(model, state, temperature)
-        return np.random.choice(state.legal_actions(rule), p=scores)
+        scores = pv_mcts_scores(model, state, temperature, eval_count)
+        return np.random.choice(state.legal_actions(), p=scores)
 
     return pv_mcts_action
 

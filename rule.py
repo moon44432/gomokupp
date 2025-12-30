@@ -1,6 +1,6 @@
 from hparams import board_width
 
-def renju(state):
+def _renju(state):
     directions = [(1, 0), (0, 1), (-1, 1), (1, 1)]
     open_threes = [[0, 1, 1, 1], [1, 0, 1, 1], [1, 1, 0, 1], [1, 1, 1, 0]]
     banned = [False] * (board_width ** 2)
@@ -9,9 +9,9 @@ def renju(state):
     banned_33 = [False] * (board_width ** 2)
 
     def is_legal(x, y):
-        if state.pieces[x + y*board_width] == 1 or state.enemy_pieces[x + y*board_width] == 1 or banned[x + y*board_width]:
+        if x < 0 or x >= board_width or y < 0 or y >= board_width:
             return False
-        elif x < 0 or x >= board_width or y < 0 or y >= board_width:
+        elif state.pieces[x + y*board_width] == 1 or state.enemy_pieces[x + y*board_width] == 1 or banned[x + y*board_width]:
             return False
         return True
     
@@ -135,14 +135,28 @@ def renju(state):
                 banned_33[pos] = True
             state.pieces[pos] = 0
 
+    def allow_five():
+        for pos in range(board_width ** 2):
+            state.pieces[pos] = 1
+            for dir in directions:
+                if chk_five(pos, dir):
+                    banned[pos] = False
+                    break
+            state.pieces[pos] = 0
+
     if state.is_first_player():
         ban_overline()
-        banned = banned or banned_overlines
+        banned = [banned[i] or banned_overlines[i] for i in range(board_width ** 2)]
         ban_44()
-        banned = banned or banned_44
+        banned = [banned[i] or banned_44[i] for i in range(board_width ** 2)]
         ban_33()
-        banned = banned or banned_33
+        banned = [banned[i] or banned_33[i] for i in range(board_width ** 2)]
+        allow_five()
 
+    return banned
+
+def renju(state):
+    banned = _renju(state)
     actions = []
     for i in range(board_width ** 2):
         if state.pieces[i] == 0 and state.enemy_pieces[i] == 0 and not banned[i]:

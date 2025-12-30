@@ -3,7 +3,7 @@ from game import State
 from mcts import pv_mcts_scores, ModelServer
 from network import DN_OUTPUT_SIZE
 from generate_data import first_player_value, write_data
-from hparams import sp_temperature, sp_game_cnt, sp_num_cores
+from hparams import sp_temperature, sp_game_cnt, sp_num_cores, sp_mcts_count
 from tqdm import tqdm
 import numpy as np
 import multiprocessing
@@ -12,20 +12,20 @@ import multiprocessing
 def play(model_server, rule):
     """Play a single game using the shared model server"""
     history = []
-    state = State()
+    state = State(rule=rule)
 
     while True:
         if state.is_done():
             break
 
-        scores = pv_mcts_scores(model_server, state, sp_temperature)
+        scores = pv_mcts_scores(model_server, sp_mcts_count, state, sp_temperature)
 
         policies = [0] * DN_OUTPUT_SIZE
-        for action, policy in zip(state.legal_actions(rule), scores):
+        for action, policy in zip(state.legal_actions(), scores):
             policies[action] = policy
         history.append([[state.pieces, state.enemy_pieces], policies, None])
 
-        action = np.random.choice(state.legal_actions(rule), p=scores)
+        action = np.random.choice(state.legal_actions(), p=scores)
         state = state.next(action)
 
     # print(state)
