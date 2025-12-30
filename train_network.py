@@ -4,15 +4,23 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from pathlib import Path
 from network import DN_INPUT_SHAPE, load_model, DualNetwork
-from hparams import rn_epochs, batch_size
+from hparams import rn_epochs, batch_size, FROM_RECORD, FROM_SELF_PLAY
 import numpy as np
 import pickle
 
 
 def load_data():
-    history_path = sorted(Path('./data').glob('*.history'))[-1]
-    with history_path.open(mode='rb') as f:
-        return pickle.load(f)
+    data = []
+    if FROM_RECORD:
+        rp_history_path = sorted(Path('./data').glob('*_rp.history'))[-1]
+        with rp_history_path.open(mode='rb') as f:
+            data.extend(pickle.load(f))
+    if FROM_SELF_PLAY:
+        sp_history_path = sorted(Path('./data').glob('*_sp.history'))[-1]
+        with sp_history_path.open(mode='rb') as f:
+            data.extend(pickle.load(f))
+
+    return data
 
 
 def train_network():

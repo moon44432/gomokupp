@@ -35,7 +35,7 @@ def record_play(record):
         h = play(record[i])
         history.extend(h)
 
-    write_data(history)
+    write_data(history, 'rp')
 
 
 def get_record_str(record_str):
