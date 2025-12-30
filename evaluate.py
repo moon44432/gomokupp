@@ -36,7 +36,7 @@ def update_best_player():
 
 def do_evaluate(args):
     """Evaluate using shared model servers"""
-    num, latest_path, best_path = args
+    num, latest_path, best_path, rule = args
     
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
@@ -44,8 +44,8 @@ def do_evaluate(args):
     model_server0 = ModelServer(latest_path, device=device, batch_size=8)
     model_server1 = ModelServer(best_path, device=device, batch_size=8)
 
-    next_action0 = pv_mcts_action(model_server0, EN_TEMPERATURE)
-    next_action1 = pv_mcts_action(model_server1, EN_TEMPERATURE)
+    next_action0 = pv_mcts_action(model_server0, EN_TEMPERATURE, rule)
+    next_action1 = pv_mcts_action(model_server1, EN_TEMPERATURE, rule)
     next_actions = (next_action0, next_action1)
     total_point = 0
 
@@ -62,12 +62,12 @@ def do_evaluate(args):
     return total_point
 
 
-def evaluate_network():
+def evaluate_network(rule=None):
     latest_path = './model/latest.pth'
     best_path = './model/best.pth'
     
     # Prepare arguments for workers
-    worker_args = [(i, latest_path, best_path) for i in range(EN_NUM_CORES)]
+    worker_args = [(i, latest_path, best_path, rule) for i in range(EN_NUM_CORES)]
     
     with multiprocessing.Pool(processes=EN_NUM_CORES) as pool:
         total = pool.map(do_evaluate, worker_args)

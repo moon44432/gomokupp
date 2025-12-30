@@ -42,11 +42,14 @@ class State:
         pieces[action] = 1
         return State(self.enemy_pieces, pieces)
 
-    def legal_actions(self):
-        actions = []
-        for i in range(self.board_width ** 2):
-            if self.pieces[i] == 0 and self.enemy_pieces[i] == 0:
-                actions.append(i)
+    def legal_actions(self, rule=None):
+        if rule is not None:
+            actions = rule(self)
+        else:
+            actions = []
+            for i in range(self.board_width ** 2):
+                if self.pieces[i] == 0 and self.enemy_pieces[i] == 0:
+                    actions.append(i)
         return actions
 
     def is_first_player(self):

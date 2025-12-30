@@ -188,10 +188,10 @@ def pv_mcts_scores(model, state, temperature):
     return scores
 
 
-def pv_mcts_action(model, temperature=0):
+def pv_mcts_action(model, temperature=0, rule=None):
     def pv_mcts_action(state):
         scores = pv_mcts_scores(model, state, temperature)
-        return np.random.choice(state.legal_actions(), p=scores)
+        return np.random.choice(state.legal_actions(rule), p=scores)
 
     return pv_mcts_action
 
