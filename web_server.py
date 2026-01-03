@@ -4,7 +4,7 @@ from network import load_model
 from game import State
 from mcts import pv_mcts_action, ModelServer
 from hparams import PLAY_MCTS_COUNT, PLAY_TEMPERATURE
-from rule import renju
+from rule import Renju
 import threading
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
@@ -35,18 +35,24 @@ def new_game():
     """새 게임 시작"""
     data = request.json
     player_color = data.get('player_color', 'black')  # 'black' or 'white'
+    use_renju = data.get('use_renju', True)  # 렌주룰 사용 여부
+    use_ai = data.get('use_ai', True)  # AI 사용 여부
     
     session_id = str(len(game_sessions))
     
+    rule = Renju() if use_renju else None
+    
     with session_lock:
         game_sessions[session_id] = {
-            'state': State(rule=renju),
+            'state': State(rule=rule),
             'player_color': player_color,
-            'next_action': pv_mcts_action(model_server, PLAY_MCTS_COUNT, PLAY_TEMPERATURE)
+            'use_ai': use_ai,
+            'use_renju': use_renju,
+            'next_action': pv_mcts_action(model_server, PLAY_MCTS_COUNT, PLAY_TEMPERATURE) if use_ai else None
         }
     
-    # If player chose white, AI makes first move
-    if player_color == 'white':
+    # If AI is enabled and player chose white, AI makes first move
+    if use_ai and player_color == 'white':
         with session_lock:
             session = game_sessions[session_id]
             action = session['next_action'](session['state'])
@@ -57,14 +63,16 @@ def new_game():
                 'board': get_board_state(session['state']),
                 'ai_move': action_to_coords(action, session['state'].board_width),
                 'is_done': session['state'].is_done(),
-                'winner': get_winner(session['state'])
+                'winner': get_winner(session['state']),
+                'forbidden_moves': get_forbidden_moves(session['state']) if use_renju else []
             })
     
     return jsonify({
         'session_id': session_id,
         'board': get_board_state(game_sessions[session_id]['state']),
         'is_done': False,
-        'winner': None
+        'winner': None,
+        'forbidden_moves': get_forbidden_moves(game_sessions[session_id]['state']) if use_renju else []
     })
 
 
@@ -82,6 +90,8 @@ def make_move():
     with session_lock:
         session = game_sessions[session_id]
         state = session['state']
+        use_ai = session.get('use_ai', True)
+        use_renju = session.get('use_renju', True)
         
         # Convert coordinates to action
         action = x + y * state.board_width
@@ -100,20 +110,32 @@ def make_move():
                 'board': get_board_state(state),
                 'is_done': True,
                 'winner': get_winner(state),
-                'ai_move': None
+                'ai_move': None,
+                'forbidden_moves': get_forbidden_moves(state) if use_renju else []
             })
         
-        # AI makes move
-        action = session['next_action'](state)
-        state = state.next(action)
-        session['state'] = state
-        
-        return jsonify({
-            'board': get_board_state(state),
-            'ai_move': action_to_coords(action, state.board_width),
-            'is_done': state.is_done(),
-            'winner': get_winner(state)
-        })
+        # If AI is enabled, AI makes move
+        if use_ai:
+            action = session['next_action'](state)
+            state = state.next(action)
+            session['state'] = state
+            
+            return jsonify({
+                'board': get_board_state(state),
+                'ai_move': action_to_coords(action, state.board_width),
+                'is_done': state.is_done(),
+                'winner': get_winner(state),
+                'forbidden_moves': get_forbidden_moves(state) if use_renju else []
+            })
+        else:
+            # No AI, just return current state
+            return jsonify({
+                'board': get_board_state(state),
+                'ai_move': None,
+                'is_done': state.is_done(),
+                'winner': get_winner(state),
+                'forbidden_moves': get_forbidden_moves(state) if use_renju else []
+            })
 
 
 @app.route('/api/reset', methods=['POST'])
@@ -122,17 +144,24 @@ def reset_game():
     data = request.json
     session_id = data.get('session_id')
     player_color = data.get('player_color', 'black')
+    use_renju = data.get('use_renju', True)
+    use_ai = data.get('use_ai', True)
     
     if session_id not in game_sessions:
         return jsonify({'error': 'Invalid session'}), 400
     
+    rule = Renju() if use_renju else None
+    
     with session_lock:
         session = game_sessions[session_id]
-        session['state'] = State()
+        session['state'] = State(rule=rule)
         session['player_color'] = player_color
+        session['use_ai'] = use_ai
+        session['use_renju'] = use_renju
+        session['next_action'] = pv_mcts_action(model_server, PLAY_MCTS_COUNT, PLAY_TEMPERATURE) if use_ai else None
         
-        # If player chose white, AI makes first move
-        if player_color == 'white':
+        # If AI is enabled and player chose white, AI makes first move
+        if use_ai and player_color == 'white':
             action = session['next_action'](session['state'])
             session['state'] = session['state'].next(action)
             
@@ -140,13 +169,15 @@ def reset_game():
                 'board': get_board_state(session['state']),
                 'ai_move': action_to_coords(action, session['state'].board_width),
                 'is_done': session['state'].is_done(),
-                'winner': get_winner(session['state'])
+                'winner': get_winner(session['state']),
+                'forbidden_moves': get_forbidden_moves(session['state']) if use_renju else []
             })
     
     return jsonify({
         'board': get_board_state(game_sessions[session_id]['state']),
         'is_done': False,
-        'winner': None
+        'winner': None,
+        'forbidden_moves': get_forbidden_moves(game_sessions[session_id]['state']) if use_renju else []
     })
 
 
@@ -186,6 +217,22 @@ def get_winner(state):
         return 'white' if state.is_first_player() else 'black'
     
     return 'draw'
+
+
+def get_forbidden_moves(state):
+    """렌주룰 금수 위치 반환"""
+    if state.rule is None:
+        return []
+    banned = state.rule.get_banned(state)
+    forbidden = []
+    for i in range(len(banned)):
+        if banned[i]:
+            x = i % state.board_width
+            y = i // state.board_width
+            # 금수 타입: 1=장목(6+), 2=44, 3=33
+            type_map = {1: '6+', 2: '44', 3: '33'}
+            forbidden.append({'x': x, 'y': y, 'type': type_map.get(banned[i], '')})
+    return forbidden
 
 
 if __name__ == '__main__':

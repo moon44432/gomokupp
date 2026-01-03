@@ -1,9 +1,13 @@
 // Game state
 let sessionId = null;
 let playerColor = 'black';
+let useRenju = true;
+let useAI = true;
 let gameActive = false;
 let boardState = null;
 let moveHistory = [];  // Track move order: [{x, y, color, moveNumber}, ...]
+let forbiddenMoves = [];  // Track forbidden moves for current turn
+let currentTurn = 'black';  // Track whose turn it is
 const BOARD_SIZE = 15;
 const CELL_SIZE = 40;
 
@@ -16,9 +20,10 @@ const gameInfo = document.getElementById('gameInfo');
 const message = document.getElementById('message');
 const loading = document.getElementById('loading');
 const newGameBtn = document.getElementById('newGameBtn');
-const resetBtn = document.getElementById('resetBtn');
 const blackBtn = document.getElementById('blackBtn');
 const whiteBtn = document.getElementById('whiteBtn');
+const useRenjuCheckbox = document.getElementById('useRenjuCheckbox');
+const useAICheckbox = document.getElementById('useAICheckbox');
 
 // Initialize
 drawEmptyBoard();
@@ -53,7 +58,7 @@ function drawEmptyBoard() {
     }
     
     // Draw star points
-    const starPoints = [3, 7, 11];
+    const starPoints = [3, 11];
     ctx.fillStyle = '#000';
     for (let x of starPoints) {
         for (let y of starPoints) {
@@ -62,11 +67,21 @@ function drawEmptyBoard() {
             ctx.fill();
         }
     }
+    ctx.beginPath();
+    ctx.arc(CELL_SIZE * (7 + 0.5), CELL_SIZE * (7 + 0.5), 3, 0, 2 * Math.PI);
+    ctx.fill();
 }
 
 // Draw board with pieces
-function drawBoard(board, history = moveHistory) {
+function drawBoard(board, history = moveHistory, forbidden = forbiddenMoves) {
     drawEmptyBoard();
+    
+    // Draw forbidden moves (red X marks)
+    if (useRenju && forbidden) {
+        for (let move of forbidden) {
+            drawForbiddenMark(move.x, move.y, move.type || '');
+        }
+    }
     
     // Draw pieces with move numbers
     for (let move of history) {
@@ -113,8 +128,44 @@ function drawPiece(x, y, color, moveNumber = null) {
         ctx.font = 'bold 14px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = color === 1 ? '#fff' : '#000';
+        // Check if this is the last move
+        const isLastMove = moveNumber === moveHistory.length;
+        ctx.fillStyle = isLastMove ? '#ff0000' : (color === 1 ? '#fff' : '#000');
         ctx.fillText(moveNumber.toString(), centerX, centerY);
+    }
+}
+
+// Draw forbidden mark (red X)
+function drawForbiddenMark(x, y, type = '') {
+    const centerX = CELL_SIZE * (x + 0.5);
+    const centerY = CELL_SIZE * (y + 0.5);
+    const size = CELL_SIZE * 0.3;
+    
+    ctx.strokeStyle = '#ff0000';
+    ctx.lineWidth = 2;
+    
+    // Draw X
+    ctx.beginPath();
+    ctx.moveTo(centerX - size, centerY - size);
+    ctx.lineTo(centerX + size, centerY + size);
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.moveTo(centerX + size, centerY - size);
+    ctx.lineTo(centerX - size, centerY + size);
+    ctx.stroke();
+    
+    // Draw type text inside X
+    if (type) {
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#ff0000';
+        // 2px stroke
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#ffffff';
+        ctx.strokeText(type, centerX, centerY);
+        ctx.fillText(type, centerX, centerY);
     }
 }
 
@@ -123,6 +174,11 @@ async function startNewGame() {
     showLoading('게임을 시작하는 중...');
     setMessage('', 'info');
     moveHistory = [];  // Reset move history
+    forbiddenMoves = [];  // Reset forbidden moves
+    
+    // Get checkbox states
+    useRenju = useRenjuCheckbox.checked;
+    useAI = useAICheckbox.checked;
     
     try {
         const response = await fetch('/api/new_game', {
@@ -131,7 +187,9 @@ async function startNewGame() {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                player_color: playerColor
+                player_color: playerColor,
+                use_renju: useRenju,
+                use_ai: useAI
             })
         });
         
@@ -141,6 +199,10 @@ async function startNewGame() {
             sessionId = data.session_id;
             boardState = data.board;
             gameActive = true;
+            forbiddenMoves = data.forbidden_moves || [];
+            
+            // Set initial turn
+            currentTurn = 'black';
             
             // If AI made first move, add it to history
             if (data.ai_move) {
@@ -151,13 +213,13 @@ async function startNewGame() {
                     color: aiColorNum,
                     moveNumber: 1
                 });
+                currentTurn = playerColor;  // Now it's player's turn
                 setMessage(`AI가 (${String.fromCharCode(65 + data.ai_move.x)}, ${15 - data.ai_move.y})에 두었습니다`, 'info');
             }
             
-            drawBoard(boardState, moveHistory);
+            drawBoard(boardState, moveHistory, forbiddenMoves);
             canvas.classList.remove('disabled');
-            resetBtn.disabled = false;
-            newGameBtn.disabled = true;
+            newGameBtn.disabled = false;
             updateGameInfo();
             
             if (data.is_done) {
@@ -165,61 +227,6 @@ async function startNewGame() {
             }
         } else {
             setMessage('게임 시작 실패: ' + data.error, 'error');
-        }
-    } catch (error) {
-        setMessage('서버 연결 오류: ' + error.message, 'error');
-    } finally {
-        hideLoading();
-    }
-}
-
-// Reset game
-async function resetGame() {
-    if (!sessionId) return;
-    
-    showLoading('게임을 리셋하는 중...');
-    setMessage('', 'info');
-    moveHistory = [];  // Reset move history
-    
-    try {
-        const response = await fetch('/api/reset', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                session_id: sessionId,
-                player_color: playerColor
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            boardState = data.board;
-            gameActive = true;
-            
-            // If AI made first move, add it to history
-            if (data.ai_move) {
-                const aiColorNum = playerColor === 'black' ? 2 : 1;
-                moveHistory.push({
-                    x: data.ai_move.x,
-                    y: data.ai_move.y,
-                    color: aiColorNum,
-                    moveNumber: 1
-                });
-                setMessage(`AI가 (${String.fromCharCode(65 + data.ai_move.x)}, ${15 - data.ai_move.y})에 두었습니다`, 'info');
-            }
-            
-            drawBoard(boardState, moveHistory);
-            canvas.classList.remove('disabled');
-            updateGameInfo();
-            
-            if (data.is_done) {
-                handleGameEnd(data.winner);
-            }
-        } else {
-            setMessage('게임 리셋 실패: ' + data.error, 'error');
         }
     } catch (error) {
         setMessage('서버 연결 오류: ' + error.message, 'error');
@@ -256,13 +263,17 @@ async function makeMove(x, y) {
     gameActive = false;
     canvas.classList.add('disabled');
     
-    // Add player's move to history and draw immediately
-    const playerColorNum = playerColor === 'black' ? 1 : 2;
-    moveHistory.push({x, y, color: playerColorNum, moveNumber: moveHistory.length + 1});
-    drawBoard(boardState, moveHistory);
+    // Determine whose turn it is
+    const currentPlayerColorNum = currentTurn === 'black' ? 1 : 2;
     
-    // Show AI thinking message
-    showLoading('AI가 생각하는 중...');
+    // Add current player's move to history and draw immediately
+    moveHistory.push({x, y, color: currentPlayerColorNum, moveNumber: moveHistory.length + 1});
+    drawBoard(boardState, moveHistory, forbiddenMoves);
+    
+    // Show AI thinking message if AI is next
+    if (useAI) {
+        showLoading('AI가 생각하는 중...');
+    }
     
     try {
         const response = await fetch('/api/move', {
@@ -281,19 +292,20 @@ async function makeMove(x, y) {
         
         if (response.ok) {
             boardState = data.board;
+            forbiddenMoves = data.forbidden_moves || [];
             
             if (data.is_done) {
                 handleGameEnd(data.winner);
             } else if (data.ai_move) {
-                // Add AI's move to history
-                const aiColorNum = playerColor === 'black' ? 2 : 1;
+                // AI made a move
+                const aiColorNum = currentTurn === 'black' ? 2 : 1;
                 moveHistory.push({
                     x: data.ai_move.x, 
                     y: data.ai_move.y, 
                     color: aiColorNum, 
                     moveNumber: moveHistory.length + 1
                 });
-                drawBoard(boardState, moveHistory);
+                drawBoard(boardState, moveHistory, forbiddenMoves);
                 
                 setMessage(`AI가 (${String.fromCharCode(65 + data.ai_move.x)}, ${15 - data.ai_move.y})에 두었습니다`, 'info');
                 gameActive = true;
@@ -302,11 +314,19 @@ async function makeMove(x, y) {
                 if (data.is_done) {
                     handleGameEnd(data.winner);
                 }
+            } else {
+                // No AI move (player vs player mode)
+                // Switch turn
+                currentTurn = currentTurn === 'black' ? 'white' : 'black';
+                drawBoard(boardState, moveHistory, forbiddenMoves);
+                updateGameInfo();
+                gameActive = true;
+                canvas.classList.remove('disabled');
             }
         } else {
             // If move was invalid, remove it from history
             moveHistory.pop();
-            drawBoard(boardState, moveHistory);
+            drawBoard(boardState, moveHistory, forbiddenMoves);
             setMessage('잘못된 수입니다: ' + data.error, 'error');
             gameActive = true;
             canvas.classList.remove('disabled');
@@ -314,7 +334,7 @@ async function makeMove(x, y) {
     } catch (error) {
         // If error occurred, remove the move from history
         moveHistory.pop();
-        drawBoard(boardState, moveHistory);
+        drawBoard(boardState, moveHistory, forbiddenMoves);
         setMessage('서버 연결 오류: ' + error.message, 'error');
         gameActive = true;
         canvas.classList.remove('disabled');
@@ -332,19 +352,22 @@ function handleGameEnd(winner) {
     if (winner === 'draw') {
         setMessage('무승부입니다!', 'success');
         gameInfo.textContent = '게임 종료 - 무승부';
-    } else if (winner === playerColor) {
-        setMessage('🎉 축하합니다! 승리하셨습니다!', 'success');
-        gameInfo.textContent = '게임 종료 - 플레이어 승리!';
     } else {
-        setMessage('AI가 승리했습니다. 다시 도전해보세요!', 'error');
-        gameInfo.textContent = '게임 종료 - AI 승리';
+        const winnerText = (winner === 'black') ? '⚫ 흑' : '⚪ 백';
+        setMessage(`${winnerText}의 승리입니다!`, 'success');
+        gameInfo.textContent = `게임 종료 - ${winnerText} 승리`;
     }
 }
 
 // Update game info
 function updateGameInfo() {
-    const colorText = playerColor === 'black' ? '⚫ 흑' : '⚪ 백';
-    gameInfo.textContent = `당신의 차례입니다 (${colorText})`;
+    if (useAI) {
+        const colorText = playerColor === 'black' ? '⚫ 흑' : '⚪ 백';
+        gameInfo.textContent = `${colorText}의 차례입니다`;
+    } else {
+        const colorText = currentTurn === 'black' ? '⚫ 흑' : '⚪ 백';
+        gameInfo.textContent = `${colorText}의 차례입니다`;
+    }
 }
 
 // Show/hide loading
