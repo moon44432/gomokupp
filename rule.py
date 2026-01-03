@@ -1,165 +1,191 @@
+from os import name
 from hparams import board_width
+from enum import Enum
 
-def _renju(state):
+class Renju:
+    board_width = board_width
     directions = [(1, 0), (0, 1), (-1, 1), (1, 1)]
-    open_threes = [[0, 1, 1, 1], [1, 0, 1, 1], [1, 1, 0, 1], [1, 1, 1, 0]]
-    banned = [False] * (board_width ** 2)
-    banned_overlines = [False] * (board_width ** 2)
-    banned_44 = [False] * (board_width ** 2)
-    banned_33 = [False] * (board_width ** 2)
 
-    def is_legal(x, y):
-        if x < 0 or x >= board_width or y < 0 or y >= board_width:
-            return False
-        elif state.pieces[x + y*board_width] == 1 or state.enemy_pieces[x + y*board_width] == 1 or banned[x + y*board_width]:
-            return False
-        return True
+    fours = [[-1, 0, 1, 1, 1, 1, -1],
+             [-1, 1, 1, 1, 1, 0, -1],
+             [-1, 1, 0, 1, 1, 1, -1],
+             [-1, 1, 1, 0, 1, 1, -1],
+             [-1, 1, 1, 1, 0, 1, -1]]
     
-    def pattern_match(pos, dir, pattern):
-        x, y = divmod(pos, board_width)
+    open_three_patterns = [
+            ([-1, 0, 0, 1, 1, 1, 0, -1], 2),
+            ([-1, 0, 1, 1, 1, 0, 0, -1], 5),
+            ([-1, 0, 1, 0, 1, 1, 0, -1], 3),
+            ([-1, 0, 1, 1, 0, 1, 0, -1], 4)
+        ]
+
+    def is_banned(self, pieces, enemy_pieces, pos):
+        if self.chk_5(pieces, pos):
+            return 0
+        elif self.chk_overline(pieces, pos):
+            return 1
+        elif self.chk_44(pieces, enemy_pieces, pos):
+            return 2
+        elif self.chk_33(pieces, enemy_pieces, pos):
+            return 3
+        else:
+            return 0
+        
+    def chk_5(self, pieces, pos):
+        pieces[pos] = 1
+        for dir in self.directions:
+            if self.count_consecutive(pieces, pos, dir) == 5:
+                pieces[pos] = 0
+                return True
+        pieces[pos] = 0
+        return False
+    
+    def chk_overline(self, pieces, pos):
+        pieces[pos] = 1
+        for dir in self.directions:
+            if self.count_consecutive(pieces, pos, dir) >= 6:
+                pieces[pos] = 0
+                return True
+        pieces[pos] = 0
+        return False
+    
+    def cnt_open3(self, pieces, enemy_pieces, pos, dir):
+        dx, dy = dir
+        count = 0
+        skip = False
+        
+        for i, (pattern, gap_idx) in enumerate(self.open_three_patterns):
+            if i == 1 and skip:
+                continue
+                
+            match_positions = self.pattern_match(pieces, enemy_pieces, pos, dir, pattern)
+
+            if len(match_positions) == 0:
+                continue
+
+            sx, sy = match_positions[0]
+            gap_x, gap_y = sx + gap_idx*dx, sy + gap_idx*dy
+            gap_pos_idx = gap_x + gap_y * self.board_width
+                
+            is_gap_banned = self.is_banned(pieces, enemy_pieces, gap_pos_idx) or self.chk_5(pieces, gap_pos_idx)
+                
+            if is_gap_banned:
+                continue
+
+            count += 1
+            if i == 0:
+                skip = True
+        return count
+    
+    def cnt_4(self, pieces, enemy_pieces, pos, dir):
+        count = 0
+        skip = False
+
+        for i, pattern in enumerate(self.fours):
+            if i == 1 and skip:
+                continue
+
+            match_positions = self.pattern_match(pieces, enemy_pieces, pos, dir, pattern)
+
+            if len(match_positions) > 0:
+                count += len(match_positions)
+                if i == 0:
+                    skip = True
+
+        return count
+    
+    def chk_44(self, pieces, enemy_pieces, pos):
+        pieces[pos] = 1
+        total_fours = 0
+        for dir in self.directions:
+            total_fours += self.cnt_4(pieces, enemy_pieces, pos, dir)
+            if total_fours >= 2:
+                pieces[pos] = 0
+                return True
+        pieces[pos] = 0
+        return False
+    
+    def chk_33(self, pieces, enemy_pieces, pos):
+        pieces[pos] = 1
+        total_open3 = 0
+        for dir in self.directions:
+            total_open3 += self.cnt_open3(pieces, enemy_pieces, pos, dir)
+            if total_open3 >= 2:
+                pieces[pos] = 0
+                return True
+        pieces[pos] = 0
+        return False
+    
+    def pattern_match(self, pieces, enemy_pieces, pos, dir, pattern):
+        x, y = pos % self.board_width, pos // self.board_width
         dx, dy = dir
         is_match = True
-        open_cnt = 0
-        for i in range(len(pattern)):
-            x_i = x - dx * (i + 1)
-            y_i = y - dy * (i + 1)
+
+        match_positions = []
+
+        for offset in range(len(pattern)):
+            sx = curr_x = x - dx * offset
+            sy = curr_y = y - dy * offset
             is_match = True
-            open_cnt = 0
-            if is_legal(x_i, y_i):
-                open_cnt += 1
             for p in pattern:
-                x_i, y_i = x_i + dx, y_i + dy
-                if 0 <= x_i < board_width and 0 <= y_i < board_width:
+                if 0 <= curr_x < self.board_width and 0 <= curr_y < self.board_width:
                     if p == 1:
-                        if state.pieces[x_i + y_i*board_width] != 1:
+                        if pieces[curr_x + curr_y*self.board_width] != 1:
                             is_match = False
                             break
                     elif p == 0:
-                        if not is_legal(x_i, y_i):
+                        if pieces[curr_x + curr_y*self.board_width] == 1 or enemy_pieces[curr_x + curr_y*self.board_width] == 1:
+                            is_match = False
+                            break
+                    elif p == -1:
+                        if pieces[curr_x + curr_y*self.board_width] == 1:
                             is_match = False
                             break
                 else:
-                    is_match = False
-                    break
-            if is_legal(x_i + dx, y_i + dy):
-                open_cnt += 1
+                    if p != -1:
+                        is_match = False
+                        break
+                curr_x, curr_y = curr_x + dx, curr_y + dy
             if is_match:
-                return True, open_cnt
-        return False, open_cnt
+                match_positions.append((sx, sy))
+        return match_positions
 
-    def count_consecutive(pos, dir):
-        x, y = divmod(pos, board_width)
+    def count_consecutive(self, pieces, pos, dir):
+        x, y = pos % self.board_width, pos // self.board_width
         dx, dy = dir
-        count = 1
-        open_cnt = 0
+        count = 0
         while True:
-            x, y = x + dx, y + dy
-            if 0 <= x < board_width and 0 <= y < board_width:
-                if state.pieces[x + y*board_width] == 1:
+            if 0 <= x < self.board_width and 0 <= y < self.board_width:
+                if pieces[x + y*self.board_width] == 1:
                     count += 1
                 else: break
             else: break
-        if is_legal(x, y):
-            open_cnt += 1
-        x, y = divmod(pos, board_width)
+            x, y = x + dx, y + dy
+
+        x, y = pos % self.board_width, pos // self.board_width
         while True:
             x, y = x - dx, y - dy
-            if 0 <= x < board_width and 0 <= y < board_width:
-                if state.pieces[x + y*board_width] == 1:
+            if 0 <= x < self.board_width and 0 <= y < self.board_width:
+                if pieces[x + y*self.board_width] == 1:
                     count += 1
                 else: break
             else: break
-        if is_legal(x, y):
-            open_cnt += 1
-        return count, open_cnt
+        return count
     
-    def chk_overline(pos, dir):
-        count, _ = count_consecutive(pos, dir)
-        if count >= 6:
-            return True
-        return False
-
-    def chk_five(pos, dir):
-        count, _ = count_consecutive(pos, dir)
-        if count == 5:
-            return True
-        return False
+    def get_banned(self, state):
+        ban_type = [0] * (self.board_width ** 2)
+        if state.is_first_player():
+            pieces = state.pieces
+            enemy_pieces = state.enemy_pieces
+            for pos in range(self.board_width ** 2):
+                if pieces[pos] == 0 and enemy_pieces[pos] == 0:
+                    ban_type[pos] = self.is_banned(pieces, enemy_pieces, pos)
+        return ban_type
     
-    def chk_four(pos, dir):
-        count, open_cnt = count_consecutive(pos, dir)
-        if count == 4 and open_cnt >= 1:
-            return True
-        return False
-    
-    def chk_open_four(pos, dir):
-        count, open_cnt = count_consecutive(pos, dir)
-        if count == 4 and open_cnt == 2:
-            return True
-        return False
-    
-    def chk_open_three(pos, dir):
-        for pattern in open_threes:
-            is_match, open_cnt = pattern_match(pos, dir, pattern)
-            if is_match and open_cnt == 2:
-                return True
-        return False
-    
-    def ban_overline():
-        for pos in range(board_width ** 2):
-            state.pieces[pos] = 1
-            for dir in directions:
-                if chk_overline(pos, dir):
-                    banned_overlines[pos] = True
-                    break
-            state.pieces[pos] = 0
-    
-    def ban_44():
-        for pos in range(board_width ** 2):
-            state.pieces[pos] = 1
-            four_cnt = 0
-            for dir in directions:
-                if chk_four(pos, dir):
-                    four_cnt += 1
-            if four_cnt >= 2:
-                banned_44[pos] = True
-            state.pieces[pos] = 0
-
-    def ban_33():
-        for pos in range(board_width ** 2):
-            state.pieces[pos] = 1
-            three_cnt = 0
-            for dir in directions + [(-dir[0], -dir[1]) for dir in directions]:
-                if chk_open_three(pos, dir):
-                    three_cnt += 1
-            if three_cnt >= 2:
-                banned_33[pos] = True
-            state.pieces[pos] = 0
-
-    def allow_five():
-        for pos in range(board_width ** 2):
-            state.pieces[pos] = 1
-            for dir in directions:
-                if chk_five(pos, dir):
-                    banned[pos] = False
-                    break
-            state.pieces[pos] = 0
-
-    if state.is_first_player():
-        ban_overline()
-        banned = [banned[i] or banned_overlines[i] for i in range(board_width ** 2)]
-        ban_44()
-        banned = [banned[i] or banned_44[i] for i in range(board_width ** 2)]
-        ban_33()
-        banned = [banned[i] or banned_33[i] for i in range(board_width ** 2)]
-        allow_five()
-
-    return banned
-
-def renju(state):
-    banned = _renju(state)
-    actions = []
-    for i in range(board_width ** 2):
-        if state.pieces[i] == 0 and state.enemy_pieces[i] == 0 and not banned[i]:
-            actions.append(i)
-
-    return actions
+    def get_actions(self, state):
+        actions = []
+        banned = self.get_banned(state)
+        for pos in range(self.board_width ** 2):
+            if state.pieces[pos] == 0 and state.enemy_pieces[pos] == 0 and banned[pos] == 0:
+                actions.append(pos)
+        return actions

@@ -3,7 +3,7 @@ from network import load_model
 from game import State
 from mcts import pv_mcts_action, ModelServer
 from hparams import PLAY_TEMPERATURE, PLAY_MCTS_COUNT
-from rule import renju
+from rule import Renju
 
 
 class Game:
@@ -46,12 +46,13 @@ if __name__ == '__main__':
     model_server = ModelServer('./model/best.pth', device=device, batch_size=8)
 
     # 게임 UI 실행
-    f = Game(model_server=model_server, rule=renju)
+    f = Game(model_server=model_server, rule=Renju())
 
     while True:
-        f.state = State(rule=renju)
+        f.state = State(rule=Renju())
         while True:
-            f.turn_of_ai()
+            # f.turn_of_ai()
+            f.turn_of_human()
             if f.state.is_done():
                 print('대국 종료')
                 break

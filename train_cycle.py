@@ -5,7 +5,7 @@ from train_network import train_network
 from evaluate import evaluate_network
 from record_play import generate_record_list
 from record_play import record_play
-from rule import renju
+from rule import Renju
 from hparams import *
 
 
@@ -17,7 +17,7 @@ if __name__ == "__main__":
     dual_network()
 
     record_list = generate_record_list()
-    rule = renju
+    rule = Renju()
 
     for i in range(train_cycle):
         print('Training {:04d}'.format(i + 1))

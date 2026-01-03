@@ -2,12 +2,11 @@
 from hparams import board_width, count_len
 
 class State:
-    board_width = board_width
-
-    def __init__(self, pieces=None, enemy_pieces=None):
+    def __init__(self, pieces=None, enemy_pieces=None, rule=None):
+        self.board_width = board_width
         self.pieces = pieces if pieces is not None else [0] * (board_width ** 2)
         self.enemy_pieces = enemy_pieces if enemy_pieces is not None else [0] * (board_width ** 2)
-        self.rule = None
+        self.rule = rule
 
     def count_piece(self, pieces):
         count = 0
@@ -41,14 +40,14 @@ class State:
     def next(self, action):
         pieces = self.pieces.copy()
         pieces[action] = 1
-        return State(self.enemy_pieces, pieces)
+        return State(self.enemy_pieces, pieces, rule=self.rule)
 
     def legal_actions(self):
         if self.rule is not None:
-            actions = self.rule(self)
+            actions = self.rule.get_actions(self)
         else:
             actions = []
-            for i in range(self.board_width ** 2):
+            for i in range(board_width ** 2):
                 if self.pieces[i] == 0 and self.enemy_pieces[i] == 0:
                     actions.append(i)
         return actions
@@ -57,8 +56,9 @@ class State:
         return self.count_piece(self.pieces) == self.count_piece(self.enemy_pieces)
 
     def __str__(self):
-        ox = ('o', 'x') if self.is_first_player() else ('x', 'o')
+        ox = ('o ', 'x ') if self.is_first_player() else ('x ', 'o ')
         str = ''
+        banned = self.rule.get_banned(self) if self.rule is not None else [False] * (board_width ** 2)
         for i in range(board_width ** 2):
             if i % board_width == 0:
                 str += '{:2d} '.format(board_width - int(i / board_width))
@@ -67,8 +67,11 @@ class State:
             elif self.enemy_pieces[i] == 1:
                 str += ox[1]
             else:
-                str += '.'
+                if banned[i]:
+                    str += '_ '
+                else:
+                    str += '. '
             if i % board_width == board_width - 1:
                 str += '\n'
-        str += '   ABCDEFGHIJKLMNO'
+        str += '   A B C D E F G H I J K L M N O'
         return str
