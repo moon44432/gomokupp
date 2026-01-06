@@ -1,12 +1,13 @@
 import torch
-from game import State
-from mcts import pv_mcts_scores, ModelServer
-from network import DN_OUTPUT_SIZE
-from generate_data import first_player_value, write_data
-from hparams import sp_temperature, sp_game_cnt, sp_num_cores, sp_mcts_count
-from tqdm import tqdm
 import numpy as np
 import multiprocessing
+from tqdm import tqdm
+
+from game import State, get_input_planes
+from mcts import pv_mcts_scores, ModelServer
+from network import output_size
+from generate_data import first_player_value, write_data
+from hparams import RL_TEMP, RL_GAME_CNT, RL_CORES, RL_MCTS_CNT
 
 
 def play(model_server, rule):
@@ -18,12 +19,12 @@ def play(model_server, rule):
         if state.is_done():
             break
 
-        scores = pv_mcts_scores(model_server, sp_mcts_count, state, sp_temperature)
+        scores = pv_mcts_scores(model_server, RL_MCTS_CNT, state, RL_TEMP)
 
-        policies = [0] * DN_OUTPUT_SIZE
+        policies = [0] * output_size
         for action, policy in zip(state.legal_actions(), scores):
             policies[action] = policy
-        history.append([[state.pieces, state.enemy_pieces], policies, None])
+        history.append([get_input_planes(state), policies, None])
 
         action = np.random.choice(state.legal_actions(), p=scores)
         state = state.next(action)
@@ -47,7 +48,7 @@ def do_self_play(args):
     model_server = ModelServer(model_path, device=device, batch_size=8)
     
     history = []
-    cnt = int(sp_game_cnt / sp_num_cores)
+    cnt = int(RL_GAME_CNT / RL_CORES)
     
     for _ in tqdm(range(cnt), position=num, desc=f"Worker {num}"):
         h = play(model_server, rule)
@@ -62,10 +63,10 @@ def self_play(rule=None):
     model_path = './model/best.pth'
     
     # Prepare arguments for workers
-    worker_args = [(i, model_path, rule) for i in range(sp_num_cores)]
+    worker_args = [(i, model_path, rule) for i in range(RL_CORES)]
     
     # Use multiprocessing pool
-    with multiprocessing.Pool(processes=sp_num_cores) as pool:
+    with multiprocessing.Pool(processes=RL_CORES) as pool:
         history_list = pool.map(do_self_play, worker_args)
     
     # Combine all histories

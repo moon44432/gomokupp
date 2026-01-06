@@ -1,9 +1,7 @@
-from os import name
-from hparams import board_width
-from enum import Enum
+from hparams import BOARD_WIDTH
 
 class Renju:
-    board_width = board_width
+    board_width = BOARD_WIDTH
     directions = [(1, 0), (0, 1), (-1, 1), (1, 1)]
 
     fours = [[-1, 0, 1, 1, 1, 1, -1],
@@ -181,11 +179,3 @@ class Renju:
                 if pieces[pos] == 0 and enemy_pieces[pos] == 0:
                     ban_type[pos] = self.is_banned(pieces, enemy_pieces, pos)
         return ban_type
-    
-    def get_actions(self, state):
-        actions = []
-        banned = self.get_banned(state)
-        for pos in range(self.board_width ** 2):
-            if state.pieces[pos] == 0 and state.enemy_pieces[pos] == 0 and banned[pos] == 0:
-                actions.append(pos)
-        return actions

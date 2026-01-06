@@ -1,9 +1,9 @@
 # Default ignored files
-/shelf/
-/workspace.xml
+*.json
 __pycache__/
-.idea/
+.venv/
 training_data/
 data/
 model/
-.venv/
+utils/
+wandb/

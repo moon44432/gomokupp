@@ -1,12 +1,13 @@
-
-from datetime import datetime
 import pickle
 import os
+from datetime import datetime
 
 
 def first_player_value(ended_state):
     if ended_state.is_lose():
         return -1 if ended_state.is_first_player() else 1
+    if ended_state.is_forbidden_move():
+        return -1 if not ended_state.is_first_player() else 1
     return 0
 
 

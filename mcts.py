@@ -1,11 +1,11 @@
 import torch
-import torch.multiprocessing as mp
-from math import sqrt
-from network import DN_INPUT_SHAPE
 import numpy as np
 import queue
 import threading
+from math import sqrt
 
+from game import get_input_planes
+from network import input_shape
 
 class ModelServer:
     """Shared model server for efficient batch prediction"""
@@ -70,10 +70,10 @@ class ModelServer:
     
     def _prepare_batch(self, states):
         """Prepare batch of states for model input"""
-        c, a, b = DN_INPUT_SHAPE
+        c, a, b = input_shape
         batch = []
         for state in states:
-            x = np.array([state.pieces, state.enemy_pieces])
+            x = np.array(get_input_planes(state))
             x = x.reshape(c, a, b)
             batch.append(x)
         return torch.FloatTensor(np.array(batch))
@@ -102,8 +102,8 @@ def predict(model, state):
         return model.predict(state)
     else:
         # Direct model inference (legacy support)
-        c, a, b = DN_INPUT_SHAPE
-        x = np.array([state.pieces, state.enemy_pieces])
+        c, a, b = input_shape
+        x = np.array(get_input_planes(state))
         x = x.reshape(1, c, a, b)
         x = torch.FloatTensor(x)
         
@@ -137,7 +137,12 @@ def pv_mcts_scores(model, state, temperature, eval_cnt):
 
         def evaluate(self):
             if self.state.is_done():
-                value = -1 if self.state.is_lose() else 0
+                if self.state.is_lose():
+                    value = -1
+                elif self.state.is_forbidden_move():
+                    value = 1
+                else:
+                    value = 0
 
                 self.w += value
                 self.n += 1
@@ -162,7 +167,7 @@ def pv_mcts_scores(model, state, temperature, eval_cnt):
                 return value
 
         def next_child_node(self):
-            C_PUCT = 1.0
+            C_PUCT = 1.5
             t = sum(nodes_to_scores(self.child_nodes))
             pucb_values = []
             for child_node in self.child_nodes:

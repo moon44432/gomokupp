@@ -1,11 +1,11 @@
-from flask import Flask, render_template, jsonify, request, send_from_directory
 import torch
-from network import load_model
+import threading
+from flask import Flask, jsonify, request, send_from_directory
+
 from game import State
 from mcts import pv_mcts_action, ModelServer
 from hparams import PLAY_MCTS_COUNT, PLAY_TEMPERATURE
 from rule import Renju
-import threading
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
@@ -215,6 +215,10 @@ def get_winner(state):
         # Current player lost, so the opponent won
         # Need to determine who is who
         return 'white' if state.is_first_player() else 'black'
+    
+    if state.is_forbidden_move():
+        # Current player made forbidden move, so opponent won
+        return 'white' if not state.is_first_player() else 'black'
     
     return 'draw'
 

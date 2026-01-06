@@ -1,37 +1,39 @@
-
 # Hyperparameters
 
 # game
-board_width = 15
-count_len = 5
-
-# generate_record_list
-xml_path = 'training_data/games.xml'
-max_record_cnt = 150000
+BOARD_WIDTH = 15
+COUNT_LEN = 5
 
 # network
-dn_filters = 128
-dn_kernel_size = 3
-dn_block_num = 8
+DN_FILTERS = 256
+DN_KERNEL_SIZE = 3
+DN_BLOCK_NUM = 8
+PREV_STATE_COUNT = 3
 
-# record_play
-REC_START_IDX = 0
-FROM_RECORD = False
-FROM_SELF_PLAY = True
+# record preprocessing
+DATABASE_PATH = 'training_data/renjunet_v10_20260105.rif'
+MAX_DATA_LENGTH = 150000
+GAME_LENGTH_THRES = 30
+
+# supervised_learning
+SL_DATASET_DIR = "./training_data/supervised_dataset"
+SL_CHUNK_SIZE = 50000
+SL_CHECKPOINT_FILE = "train_supervised_checkpoint.json"
+SL_MODEL_PATH = "./model/best_supervised.pth"
+SL_CHECKPOINT_INTERVAL = 5
+SL_EPOCHS = 50
+SL_LEARNING_RATE = 0.001
+SL_BATCH_SIZE = 256
 
 # self_play
-sp_game_cnt = 240
-sp_temperature = 0.1
-sp_num_cores = 12
-sp_mcts_count = 400
-
-# train_network
-rn_epochs = 20
-batch_size = 32
-
-# train_cycle
-record_batch_size = 500
-train_cycle = 100
+RL_CHECKPOINT_FILE = "train_sp_state.json"
+RL_GAME_CNT = 240
+RL_TEMP = 0.1
+RL_CORES = 12
+RL_MCTS_CNT = 400
+RL_EPOCHS = 10
+RL_LEARNING_RATE = 0.001
+RL_BATCH_SIZE = 256
 
 # evaluate_network
 EN_GAME_COUNT = 240  # 평가 1회 당 게임 수 (오리지널: 400)
@@ -41,5 +43,9 @@ EN_NUM_CORES = 12
 EN_MCTS_COUNT = 400
 
 # play
-PLAY_TEMPERATURE = 0.02
-PLAY_MCTS_COUNT = 500
+PLAY_TEMPERATURE = 0.01
+PLAY_MCTS_COUNT = 600
+
+# wandb
+USE_WANDB = True
+WANDB_PROJECT = "gomokupp"

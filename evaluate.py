@@ -1,16 +1,18 @@
 import torch
+import multiprocessing
 from shutil import copy
+from tqdm import tqdm
+
+from hparams import EN_GAME_COUNT, EN_TEMPERATURE, EN_AVERAGE_POINT, EN_NUM_CORES, EN_MCTS_COUNT
 from game import State
 from mcts import pv_mcts_action, ModelServer
-from network import load_model
-from tqdm import tqdm
-from hparams import EN_GAME_COUNT, EN_TEMPERATURE, EN_AVERAGE_POINT, EN_NUM_CORES, EN_MCTS_COUNT
-import multiprocessing
 
 
 def first_player_point(end_state):
     if end_state.is_lose():
         return 0 if end_state.is_first_player() else 1
+    if end_state.is_forbidden_move():
+        return 0 if not end_state.is_first_player() else 1
     return 0.5
 
 
