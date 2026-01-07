@@ -201,5 +201,36 @@ def pv_mcts_action(model, eval_count, temperature=0):
 
 
 def boltzman(xs, temperature):
-    xs = [x ** (1 / temperature) for x in xs]
-    return [x / sum(xs) for x in xs]
+    # AlphaGo Zero-style sampling: p(a) ∝ N(a)^(1/τ)
+    # Compute in log-space to avoid overflow when τ is small.
+    xs = np.asarray(xs, dtype=np.float64)
+    if xs.size == 0:
+        return []
+
+    if temperature <= 0:
+        probs = np.zeros_like(xs)
+        probs[int(np.argmax(xs))] = 1.0
+        return probs.tolist()
+
+    # Keep exact behavior for zero-count moves: 0^(1/τ) = 0
+    log_xs = np.where(xs > 0, np.log(xs), -np.inf)
+    finite = np.isfinite(log_xs)
+
+    # If all visit counts are zero, fall back to uniform
+    if not np.any(finite):
+        return (np.ones_like(xs) / xs.size).tolist()
+
+    logits = log_xs / float(temperature)
+    max_logit = np.max(logits[finite])
+    logits = logits - max_logit
+
+    exp_logits = np.zeros_like(xs)
+    exp_logits[finite] = np.exp(logits[finite])
+    s = exp_logits.sum()
+    if not np.isfinite(s) or s <= 0:
+        # Fallback: put all mass on argmax visit count
+        probs = np.zeros_like(xs)
+        probs[int(np.argmax(xs))] = 1.0
+        return probs.tolist()
+
+    return (exp_logits / s).tolist()
