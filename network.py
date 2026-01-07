@@ -86,7 +86,9 @@ class DualNetwork(nn.Module):
         nn.init.ones_(self.value_bn.weight)
         nn.init.zeros_(self.value_bn.bias)
         _init_linear(self.value_fc1)
-        _init_linear(self.value_fc2)
+        nn.init.normal_(self.value_fc2.weight, mean=0.0, std=0.01)
+        if self.value_fc2.bias is not None:
+            nn.init.zeros_(self.value_fc2.bias)
     
     def forward(self, x):
         x = self.stem_conv(x)

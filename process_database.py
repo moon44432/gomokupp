@@ -19,9 +19,9 @@ def play(record):
         history.append([get_input_planes(state), policies, None])
         state = state.next(action)
 
-    if winner == 1:
+    if winner == '1':
         value = 1
-    elif winner == 0:
+    elif winner == '0':
         value = -1
     else:
         value = 0
@@ -48,7 +48,7 @@ def generate_records():
 
     for game in tqdm(root):
         move_str = game.find("move").text
-        # bresult: 1(black win), 0(white win), 0.5(draw)
+        # bresult: '1'(black win), '0'(white win), '0.5'(draw)
         winner = game.get("bresult")
         if move_str == None or len(move_str.split()) < GAME_LENGTH_THRES:
             continue

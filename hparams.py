@@ -7,23 +7,27 @@ COUNT_LEN = 5
 # network
 DN_FILTERS = 256
 DN_KERNEL_SIZE = 3
-DN_BLOCK_NUM = 8
+DN_BLOCK_NUM = 12
 PREV_STATE_COUNT = 3
 
 # record preprocessing
 DATABASE_PATH = 'training_data/renjunet_v10_20260105.rif'
 MAX_DATA_LENGTH = 150000
-GAME_LENGTH_THRES = 30
+GAME_LENGTH_THRES = 40
 
 # supervised_learning
 SL_DATASET_DIR = "./training_data/supervised_dataset"
-SL_CHUNK_SIZE = 50000
+SL_CHUNK_SIZE = 25000
 SL_CHECKPOINT_FILE = "train_supervised_checkpoint.json"
 SL_MODEL_PATH = "./model/best_supervised.pth"
 SL_CHECKPOINT_INTERVAL = 5
 SL_EPOCHS = 50
-SL_LEARNING_RATE = 0.001
-SL_BATCH_SIZE = 256
+SL_LEARNING_RATE = 0.01
+SL_BATCH_SIZE = 512
+SL_TEST_RATIO = 0.1
+SL_TEST_INTERVAL = 50
+SL_SCHEDULER_T0 = 200
+SL_SCHEDULER_TMULT = 2
 
 # self_play
 RL_CHECKPOINT_FILE = "train_sp_state.json"

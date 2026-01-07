@@ -40,7 +40,7 @@ def train_step(model, dataset, device, cycle_idx):
     dataloader = DataLoader(dataset, batch_size=RL_BATCH_SIZE, shuffle=True)
     
     lr = RL_LEARNING_RATE
-    optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=0.0001)
+    optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4) # Standard weight decay for AdamW
     value_criterion = nn.MSELoss()
     
     model.train()
@@ -50,7 +50,7 @@ def train_step(model, dataset, device, cycle_idx):
         epoch_value_loss = 0.0
         num_batches = 0
         
-        for batch_x, batch_y_policy, batch_y_value in enumerate(tqdm(dataloader)):
+        for batch_x, batch_y_policy, batch_y_value in tqdm(dataloader):
             batch_x = batch_x.to(device)
             batch_y_policy = batch_y_policy.to(device)
             batch_y_value = batch_y_value.to(device)
