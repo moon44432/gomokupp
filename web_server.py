@@ -1,5 +1,6 @@
 import torch
 import threading
+import numpy as np
 from flask import Flask, jsonify, request, send_from_directory
 
 from game import State
@@ -22,7 +23,7 @@ def initialize_model():
     global model_server, device
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'Using device: {device}')
-    model_server = ModelServer('./model/best.pth', device=device, batch_size=8)
+    model_server = ModelServer('./model/best_supervised.pth', device=device, batch_size=8)
 
 
 @app.route('/')
@@ -37,6 +38,8 @@ def new_game():
     player_color = data.get('player_color', 'black')  # 'black' or 'white'
     use_renju = data.get('use_renju', True)  # 렌주룰 사용 여부
     use_ai = data.get('use_ai', True)  # AI 사용 여부
+    mcts_count = int(data.get('mcts_count', PLAY_MCTS_COUNT))
+    mcts_count = max(100, min(800, mcts_count))
     
     session_id = str(len(game_sessions))
     
@@ -48,7 +51,8 @@ def new_game():
             'player_color': player_color,
             'use_ai': use_ai,
             'use_renju': use_renju,
-            'next_action': pv_mcts_action(model_server, PLAY_MCTS_COUNT, PLAY_TEMPERATURE) if use_ai else None
+            'mcts_count': mcts_count,
+            'next_action': pv_mcts_action(model_server, mcts_count, PLAY_TEMPERATURE) if use_ai else None
         }
     
     # If AI is enabled and player chose white, AI makes first move
@@ -64,7 +68,8 @@ def new_game():
                 'ai_move': action_to_coords(action, session['state'].board_width),
                 'is_done': session['state'].is_done(),
                 'winner': get_winner(session['state']),
-                'forbidden_moves': get_forbidden_moves(session['state']) if use_renju else []
+                'forbidden_moves': get_forbidden_moves(session['state']) if use_renju else [],
+                'winrate': get_winrate(session['state']) if use_ai else None
             })
     
     return jsonify({
@@ -72,7 +77,8 @@ def new_game():
         'board': get_board_state(game_sessions[session_id]['state']),
         'is_done': False,
         'winner': None,
-        'forbidden_moves': get_forbidden_moves(game_sessions[session_id]['state']) if use_renju else []
+        'forbidden_moves': get_forbidden_moves(game_sessions[session_id]['state']) if use_renju else [],
+        'winrate': get_winrate(game_sessions[session_id]['state']) if use_ai else None
     })
 
 
@@ -111,7 +117,8 @@ def make_move():
                 'is_done': True,
                 'winner': get_winner(state),
                 'ai_move': None,
-                'forbidden_moves': get_forbidden_moves(state) if use_renju else []
+                'forbidden_moves': get_forbidden_moves(state) if use_renju else [],
+                'winrate': get_winrate(state) if use_ai else None
             })
         
         # If AI is enabled, AI makes move
@@ -125,7 +132,8 @@ def make_move():
                 'ai_move': action_to_coords(action, state.board_width),
                 'is_done': state.is_done(),
                 'winner': get_winner(state),
-                'forbidden_moves': get_forbidden_moves(state) if use_renju else []
+                'forbidden_moves': get_forbidden_moves(state) if use_renju else [],
+                'winrate': get_winrate(state) if use_ai else None
             })
         else:
             # No AI, just return current state
@@ -134,7 +142,8 @@ def make_move():
                 'ai_move': None,
                 'is_done': state.is_done(),
                 'winner': get_winner(state),
-                'forbidden_moves': get_forbidden_moves(state) if use_renju else []
+                'forbidden_moves': get_forbidden_moves(state) if use_renju else [],
+                'winrate': None
             })
 
 
@@ -146,6 +155,8 @@ def reset_game():
     player_color = data.get('player_color', 'black')
     use_renju = data.get('use_renju', True)
     use_ai = data.get('use_ai', True)
+    mcts_count = int(data.get('mcts_count', PLAY_MCTS_COUNT))
+    mcts_count = max(200, min(1000, mcts_count))
     
     if session_id not in game_sessions:
         return jsonify({'error': 'Invalid session'}), 400
@@ -158,7 +169,8 @@ def reset_game():
         session['player_color'] = player_color
         session['use_ai'] = use_ai
         session['use_renju'] = use_renju
-        session['next_action'] = pv_mcts_action(model_server, PLAY_MCTS_COUNT, PLAY_TEMPERATURE) if use_ai else None
+        session['mcts_count'] = mcts_count
+        session['next_action'] = pv_mcts_action(model_server, mcts_count, PLAY_TEMPERATURE) if use_ai else None
         
         # If AI is enabled and player chose white, AI makes first move
         if use_ai and player_color == 'white':
@@ -170,15 +182,36 @@ def reset_game():
                 'ai_move': action_to_coords(action, session['state'].board_width),
                 'is_done': session['state'].is_done(),
                 'winner': get_winner(session['state']),
-                'forbidden_moves': get_forbidden_moves(session['state']) if use_renju else []
+                'forbidden_moves': get_forbidden_moves(session['state']) if use_renju else [],
+                'winrate': get_winrate(session['state']) if use_ai else None
             })
     
     return jsonify({
         'board': get_board_state(game_sessions[session_id]['state']),
         'is_done': False,
         'winner': None,
-        'forbidden_moves': get_forbidden_moves(game_sessions[session_id]['state']) if use_renju else []
+        'forbidden_moves': get_forbidden_moves(game_sessions[session_id]['state']) if use_renju else [],
+        'winrate': get_winrate(game_sessions[session_id]['state']) if use_ai else None
     })
+
+
+def get_winrate(state):
+    """모델 추론값(value)을 흑/백 승률로 변환해서 반환"""
+    if model_server is None:
+        return None
+
+    try:
+        _, value = model_server.predict(state)
+        # value는 '현재 플레이어(수 둘 차례)' 관점의 [-1, 1] 값이라고 가정
+        if state.is_first_player():
+            black = (value + 1.0) / 2.0
+        else:
+            black = (1.0 - value) / 2.0
+        black = float(np.clip(black, 0.0, 1.0))
+        return {'black': black, 'white': float(1.0 - black)}
+    except Exception as e:
+        print(f'Failed to compute winrate: {e}')
+        return None
 
 
 def get_board_state(state):

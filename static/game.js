@@ -8,6 +8,8 @@ let boardState = null;
 let moveHistory = [];  // Track move order: [{x, y, color, moveNumber}, ...]
 let forbiddenMoves = [];  // Track forbidden moves for current turn
 let currentTurn = 'black';  // Track whose turn it is
+let showMoveNumbers = false;
+let winrateHistory = []; // [{black: 0..1, white: 0..1}, ...]
 const BOARD_SIZE = 15;
 const CELL_SIZE = 40;
 
@@ -18,15 +20,40 @@ const ctx = canvas.getContext('2d');
 // UI elements
 const gameInfo = document.getElementById('gameInfo');
 const message = document.getElementById('message');
-const loading = document.getElementById('loading');
 const newGameBtn = document.getElementById('newGameBtn');
 const blackBtn = document.getElementById('blackBtn');
 const whiteBtn = document.getElementById('whiteBtn');
 const useRenjuCheckbox = document.getElementById('useRenjuCheckbox');
 const useAICheckbox = document.getElementById('useAICheckbox');
+const showNumbersCheckbox = document.getElementById('showNumbersCheckbox');
+const difficultySlider = document.getElementById('difficultySlider');
+const difficultyValue = document.getElementById('difficultyValue');
+
+const winrateCanvas = document.getElementById('winrateChart');
+const winrateCtx = winrateCanvas.getContext('2d');
+
+const THINKING_TEXT = 'AI가 생각 중입니다...';
+let isThinking = false;
 
 // Initialize
 drawEmptyBoard();
+syncDifficultyUI();
+syncWinrateVisibility();
+clearWinrateChart();
+
+showNumbersCheckbox.checked = false;
+showNumbersCheckbox.addEventListener('change', () => {
+    showMoveNumbers = showNumbersCheckbox.checked;
+    drawBoard(boardState, moveHistory, forbiddenMoves);
+});
+
+difficultySlider.addEventListener('input', () => {
+    syncDifficultyUI();
+});
+
+useAICheckbox.addEventListener('change', () => {
+    syncWinrateVisibility();
+});
 
 // Color selection
 function selectColor(color) {
@@ -85,7 +112,12 @@ function drawBoard(board, history = moveHistory, forbidden = forbiddenMoves) {
     
     // Draw pieces with move numbers
     for (let move of history) {
-        drawPiece(move.x, move.y, move.color, move.moveNumber);
+        drawPiece(move.x, move.y, move.color, showMoveNumbers ? move.moveNumber : null);
+    }
+
+    if (!showMoveNumbers && history.length > 0) {
+        const last = history[history.length - 1];
+        drawLastMoveMarker(last.x, last.y);
     }
 }
 
@@ -135,6 +167,15 @@ function drawPiece(x, y, color, moveNumber = null) {
     }
 }
 
+// Draw last move marker (red square dot)
+function drawLastMoveMarker(x, y) {
+    const centerX = CELL_SIZE * (x + 0.5);
+    const centerY = CELL_SIZE * (y + 0.5);
+    const size = 8;
+    ctx.fillStyle = '#ff0000';
+    ctx.fillRect(centerX - size / 2, centerY - size / 2, size, size);
+}
+
 // Draw forbidden mark (red X)
 function drawForbiddenMark(x, y, type = '') {
     const centerX = CELL_SIZE * (x + 0.5);
@@ -171,14 +212,19 @@ function drawForbiddenMark(x, y, type = '') {
 
 // Start new game
 async function startNewGame() {
-    showLoading('게임을 시작하는 중...');
+    showThinkingMessage('게임을 시작하는 중...');
     setMessage('', 'info');
     moveHistory = [];  // Reset move history
     forbiddenMoves = [];  // Reset forbidden moves
+    winrateHistory = [];
+    clearWinrateChart();
     
     // Get checkbox states
     useRenju = useRenjuCheckbox.checked;
     useAI = useAICheckbox.checked;
+    syncWinrateVisibility();
+
+    const mctsCount = clampInt(parseInt(difficultySlider.value, 10), 100, 800);
     
     try {
         const response = await fetch('/api/new_game', {
@@ -189,7 +235,8 @@ async function startNewGame() {
             body: JSON.stringify({
                 player_color: playerColor,
                 use_renju: useRenju,
-                use_ai: useAI
+                use_ai: useAI,
+                mcts_count: mctsCount
             })
         });
         
@@ -216,6 +263,10 @@ async function startNewGame() {
                 currentTurn = playerColor;  // Now it's player's turn
                 setMessage(`AI가 (${String.fromCharCode(65 + data.ai_move.x)}, ${15 - data.ai_move.y})에 두었습니다`, 'info');
             }
+
+            if (useAI && data.winrate) {
+                pushWinrate(data.winrate);
+            }
             
             drawBoard(boardState, moveHistory, forbiddenMoves);
             canvas.classList.remove('disabled');
@@ -231,7 +282,7 @@ async function startNewGame() {
     } catch (error) {
         setMessage('서버 연결 오류: ' + error.message, 'error');
     } finally {
-        hideLoading();
+        hideThinkingMessage();
     }
 }
 
@@ -270,10 +321,8 @@ async function makeMove(x, y) {
     moveHistory.push({x, y, color: currentPlayerColorNum, moveNumber: moveHistory.length + 1});
     drawBoard(boardState, moveHistory, forbiddenMoves);
     
-    // Show AI thinking message if AI is next
-    if (useAI) {
-        showLoading('AI가 생각하는 중...');
-    }
+    // Show AI thinking message in message div
+    if (useAI) showThinkingMessage(THINKING_TEXT);
     
     try {
         const response = await fetch('/api/move', {
@@ -293,27 +342,41 @@ async function makeMove(x, y) {
         if (response.ok) {
             boardState = data.board;
             forbiddenMoves = data.forbidden_moves || [];
-            
-            if (data.is_done) {
-                handleGameEnd(data.winner);
-            } else if (data.ai_move) {
+
+            if (data.ai_move) {
                 // AI made a move
                 const aiColorNum = currentTurn === 'black' ? 2 : 1;
                 moveHistory.push({
-                    x: data.ai_move.x, 
-                    y: data.ai_move.y, 
-                    color: aiColorNum, 
+                    x: data.ai_move.x,
+                    y: data.ai_move.y,
+                    color: aiColorNum,
                     moveNumber: moveHistory.length + 1
                 });
                 drawBoard(boardState, moveHistory, forbiddenMoves);
-                
                 setMessage(`AI가 (${String.fromCharCode(65 + data.ai_move.x)}, ${15 - data.ai_move.y})에 두었습니다`, 'info');
+
+                if (useAI && data.winrate) {
+                    pushWinrate(data.winrate);
+                }
+
+                if (data.is_done) {
+                    // IMPORTANT: show win message only after AI stone is drawn
+                    handleGameEnd(data.winner);
+                    return;
+                }
+
                 gameActive = true;
                 canvas.classList.remove('disabled');
-                
-                if (data.is_done) {
-                    handleGameEnd(data.winner);
-                }
+                return;
+            }
+
+            if (useAI && data.winrate) {
+                pushWinrate(data.winrate);
+            }
+
+            if (data.is_done) {
+                // Player just won; stone already drawn locally.
+                handleGameEnd(data.winner);
             } else {
                 // No AI move (player vs player mode)
                 // Switch turn
@@ -339,7 +402,7 @@ async function makeMove(x, y) {
         gameActive = true;
         canvas.classList.remove('disabled');
     } finally {
-        hideLoading();
+        hideThinkingMessage();
     }
 }
 
@@ -370,17 +433,131 @@ function updateGameInfo() {
     }
 }
 
-// Show/hide loading
-function showLoading(text) {
-    loading.textContent = text;
+function showThinkingMessage(text) {
+    isThinking = true;
+    setMessage(text, 'info');
 }
 
-function hideLoading() {
-    loading.textContent = '';
+function hideThinkingMessage() {
+    if (isThinking && message.textContent === THINKING_TEXT) {
+        setMessage('', 'info');
+    }
+    isThinking = false;
 }
 
 // Set message
 function setMessage(text, type = 'info') {
     message.textContent = text;
     message.className = 'message ' + type;
+}
+
+function clampInt(value, min, max) {
+    if (!Number.isFinite(value)) return min;
+    return Math.max(min, Math.min(max, value));
+}
+
+function syncDifficultyUI() {
+    const mctsCount = clampInt(parseInt(difficultySlider.value, 10), 200, 1000);
+    difficultySlider.value = mctsCount;
+    difficultyValue.textContent = String(mctsCount);
+    difficultySlider.disabled = !useAICheckbox.checked;
+}
+
+function syncWinrateVisibility() {
+    const visible = useAICheckbox.checked;
+    winrateCanvas.style.display = visible ? 'block' : 'none';
+}
+
+function pushWinrate(winrate) {
+    const black = typeof winrate.black === 'number' ? winrate.black : null;
+    const white = typeof winrate.white === 'number' ? winrate.white : null;
+    if (black === null || white === null) return;
+    winrateHistory.push({
+        black: Math.max(0, Math.min(1, black)),
+        white: Math.max(0, Math.min(1, white))
+    });
+    drawWinrateChart();
+}
+
+function clearWinrateChart() {
+    winrateCtx.clearRect(0, 0, winrateCanvas.width, winrateCanvas.height);
+}
+
+function drawWinrateChart() {
+    const w = winrateCanvas.width;
+    const h = winrateCanvas.height;
+    winrateCtx.clearRect(0, 0, w, h);
+
+    // Background
+    winrateCtx.fillStyle = '#ffffff';
+    winrateCtx.fillRect(0, 0, w, h);
+
+    // Border
+    winrateCtx.strokeStyle = '#333';
+    winrateCtx.lineWidth = 1;
+    winrateCtx.strokeRect(0.5, 0.5, w - 1, h - 1);
+
+    // Title
+    winrateCtx.fillStyle = '#555';
+    winrateCtx.font = 'bold 12px Arial';
+    winrateCtx.textAlign = 'left';
+    winrateCtx.textBaseline = 'top';
+    winrateCtx.fillText('예상 승률 (흑/백)', 8, 6);
+
+    if (winrateHistory.length === 0) return;
+
+    // Latest percentage text
+    const last = winrateHistory[winrateHistory.length - 1];
+    const blackPct = Math.round(last.black * 100);
+    const whitePct = Math.round(last.white * 100);
+    winrateCtx.font = 'bold 12px Arial';
+    winrateCtx.textAlign = 'right';
+    winrateCtx.textBaseline = 'top';
+    winrateCtx.fillStyle = '#111';
+    winrateCtx.fillText(`흑 ${blackPct}% : 백 ${whitePct}%`, w - 8, 6);
+
+    const leftPad = 6;
+    const rightPad = 6;
+    const topPad = 22;
+    const bottomPad = 10;
+    const chartW = w - leftPad - rightPad;
+    const chartH = h - topPad - bottomPad;
+
+    const n = winrateHistory.length;
+    const xAt = (i) => (n === 1 ? leftPad + chartW / 2 : leftPad + (chartW * i) / (n - 1));
+    const yAtBlack = (black) => topPad + chartH * (1 - black);
+
+    // Fill black area (bottom to line)
+    winrateCtx.beginPath();
+    winrateCtx.moveTo(xAt(0), topPad + chartH);
+    for (let i = 0; i < n; i++) {
+        winrateCtx.lineTo(xAt(i), yAtBlack(winrateHistory[i].black));
+    }
+    winrateCtx.lineTo(xAt(n - 1), topPad + chartH);
+    winrateCtx.closePath();
+    winrateCtx.fillStyle = 'rgba(0, 0, 0, 1.0)';
+    winrateCtx.fill();
+
+    // Fill white area (top to line)
+    winrateCtx.beginPath();
+    winrateCtx.moveTo(xAt(0), topPad);
+    for (let i = 0; i < n; i++) {
+        winrateCtx.lineTo(xAt(i), yAtBlack(winrateHistory[i].black));
+    }
+    winrateCtx.lineTo(xAt(n - 1), topPad);
+    winrateCtx.closePath();
+    winrateCtx.fillStyle = 'rgba(230, 230, 230, 1.0)';
+    winrateCtx.fill();
+
+    // Line
+    winrateCtx.beginPath();
+    for (let i = 0; i < n; i++) {
+        const x = xAt(i);
+        const y = yAtBlack(winrateHistory[i].black);
+        if (i === 0) winrateCtx.moveTo(x, y);
+        else winrateCtx.lineTo(x, y);
+    }
+    winrateCtx.strokeStyle = '#111';
+    winrateCtx.lineWidth = 2;
+    winrateCtx.stroke();
 }

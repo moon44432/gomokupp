@@ -46,6 +46,39 @@
             flex-wrap: wrap;
         }
 
+        .slider-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .slider-group input[type="range"] {
+            width: 220px;
+        }
+
+        .below-board {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            margin-top: 10px;
+        }
+
+        .below-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        #winrateChart {
+            border: 2px solid #eee;
+            border-radius: 8px;
+            width: 600px;
+            max-width: 100%;
+        }
+
         .checkbox-group {
             display: flex;
             gap: 15px;
@@ -79,6 +112,7 @@
             padding: 10px 20px;
             border: 2px solid #ddd;
             background: white;
+            color: #333;
             cursor: pointer;
             border-radius: 8px;
             font-size: 16px;
@@ -173,12 +207,7 @@
             color: #721c24;
         }
 
-        .loading {
-            text-align: center;
-            margin-top: 10px;
-            color: #667eea;
-            font-style: italic;
-        }
+
 
         .footer {
             margin-top: 25px;
@@ -247,6 +276,13 @@
                 <button class="color-btn selected" id="blackBtn" onclick="selectColor('black')">⚫ 흑</button>
                 <button class="color-btn" id="whiteBtn" onclick="selectColor('white')">⚪ 백</button>
             </div>
+
+            <div class="slider-group">
+                <span>난이도(MCTS 탐색):</span>
+                <input type="range" id="difficultySlider" min="100" max="800" step="10" value="400">
+                <span id="difficultyValue">400</span>
+            </div>
+
             <div class="checkbox-group">
                 <div class="checkbox-item">
                     <input type="checkbox" id="useRenjuCheckbox" checked>
@@ -268,11 +304,21 @@
             <canvas id="gameBoard" width="600" height="600"></canvas>
         </div>
 
+        <div class="below-board">
+            <div class="below-controls">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="showNumbersCheckbox">
+                    <label for="showNumbersCheckbox">숫자 표시</label>
+                </div>
+            </div>
+
+            <canvas id="winrateChart" width="600" height="160"></canvas>
+        </div>
+
         <div class="message" id="message"></div>
-        <div class="loading" id="loading"></div>
 
         <div class="footer">
-            <p>Powered by Gomoku++ AI model. &copy; 2025 Seunggi Moon.</p>
+            <p>Powered by Gomoku++ AI model. &copy; 2025-2026 Seunggi Moon.</p>
             <div class="footer-links">
                 <a href="https://github.com/moon44432/gomokupp" target="_blank" class="github-btn">
                     <svg class="github-icon" viewBox="0 0 16 16" fill="currentColor">
