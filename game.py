@@ -57,6 +57,8 @@ class State:
         return State(self.enemy_pieces, pieces, rule=self.rule, last_move=action, prev_state=self)
 
     def legal_actions(self):
+        if self.rule is not None:
+            return self.rule.legal_actions(self)
         actions = []
         for i in range(BOARD_WIDTH ** 2):
             if self.pieces[i] == 0 and self.enemy_pieces[i] == 0:

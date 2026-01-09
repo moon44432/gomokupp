@@ -1,6 +1,17 @@
 from hparams import BOARD_WIDTH
 
-class Renju:
+class Rule:
+    def legal_actions(self, state):
+        actions = []
+        for i in range(BOARD_WIDTH ** 2):
+            if state.pieces[i] == 0 and state.enemy_pieces[i] == 0:
+                actions.append(i)
+        return actions
+    
+    def is_banned(self, pieces, enemy_pieces, pos):
+        return 0
+    
+class Renju(Rule):
     board_width = BOARD_WIDTH
     directions = [(1, 0), (0, 1), (-1, 1), (1, 1)]
 
@@ -169,6 +180,16 @@ class Renju:
                 else: break
             else: break
         return count
+    
+    def legal_actions(self, state):
+        # 첫 수는 천원(중앙)에 두기
+        if state.count_piece(state.pieces) == 0 and state.count_piece(state.enemy_pieces) == 0:
+            return [ (self.board_width // 2) + (self.board_width // 2) * self.board_width ]
+        actions = []
+        for i in range(BOARD_WIDTH ** 2):
+            if state.pieces[i] == 0 and state.enemy_pieces[i] == 0:
+                actions.append(i)
+        return actions
     
     def get_banned(self, state):
         ban_type = [0] * (self.board_width ** 2)

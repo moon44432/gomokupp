@@ -224,7 +224,7 @@ async function startNewGame() {
     useAI = useAICheckbox.checked;
     syncWinrateVisibility();
 
-    const mctsCount = clampInt(parseInt(difficultySlider.value, 10), 100, 800);
+    const mctsCount = clampInt(parseInt(difficultySlider.value, 10), 200, 1000);
     
     try {
         const response = await fetch('/api/new_game', {

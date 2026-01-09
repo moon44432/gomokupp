@@ -39,7 +39,7 @@ def new_game():
     use_renju = data.get('use_renju', True)  # 렌주룰 사용 여부
     use_ai = data.get('use_ai', True)  # AI 사용 여부
     mcts_count = int(data.get('mcts_count', PLAY_MCTS_COUNT))
-    mcts_count = max(100, min(800, mcts_count))
+    mcts_count = max(200, min(1000, mcts_count))
     
     session_id = str(len(game_sessions))
     

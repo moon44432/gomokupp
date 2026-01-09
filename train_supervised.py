@@ -12,10 +12,13 @@ from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
 from network import input_shape, load_model
-from process_database import generate_records, play
+from process_database import generate_records_from_rif, generate_records_from_xml, play
 from hparams import *
 
 dataset_dir = Path(SL_DATASET_DIR)
+
+train_dataset_dir = dataset_dir / 'train'
+test_dataset_dir = dataset_dir / 'test'
 
 def save_checkpoint(epoch, model_state, optimizer_state, scheduler_state):
     torch.save({
@@ -35,14 +38,17 @@ def load_checkpoint():
     return None
 
 def ensure_dataset_exists():
-    if dataset_dir.exists() and any(dataset_dir.glob('chunk_*.pkl')):
-        print(f"Dataset found in {dataset_dir}")
+    if train_dataset_dir.exists() and any(train_dataset_dir.glob('chunk_*.pkl')) and \
+       test_dataset_dir.exists() and any(test_dataset_dir.glob('chunk_*.pkl')):
+        print(f"Dataset found in {dataset_dir}, skipping creation.")
         return
 
     print(f"Creating dataset in {dataset_dir}...")
     dataset_dir.mkdir(parents=True, exist_ok=True)
+    train_dataset_dir.mkdir(parents=True, exist_ok=True)
+    test_dataset_dir.mkdir(parents=True, exist_ok=True)
     
-    records = generate_records()
+    records = generate_records_from_rif() + generate_records_from_xml()
     print(f"Found {len(records)} records.")
 
     history = []
@@ -64,7 +70,7 @@ def ensure_dataset_exists():
         chunk = train_history[i:i + SL_CHUNK_SIZE]
         print(f"Processing train chunk {i // SL_CHUNK_SIZE + 1} / {(len(train_history) + SL_CHUNK_SIZE - 1) // SL_CHUNK_SIZE}...")
             
-        output_path = dataset_dir / f"chunk_{i // SL_CHUNK_SIZE:03d}.pkl"
+        output_path = train_dataset_dir / f"chunk_{i // SL_CHUNK_SIZE:03d}.pkl"
         with open(output_path, 'wb') as f:
             pickle.dump(chunk, f)
             
@@ -73,7 +79,7 @@ def ensure_dataset_exists():
         chunk = test_history[i:i + SL_CHUNK_SIZE]
         print(f"Processing test chunk {i // SL_CHUNK_SIZE + 1} / {(len(test_history) + SL_CHUNK_SIZE - 1) // SL_CHUNK_SIZE}...")
             
-        output_path = dataset_dir / f"test_chunk_{i // SL_CHUNK_SIZE:03d}.pkl"
+        output_path = test_dataset_dir / f"chunk_{i // SL_CHUNK_SIZE:03d}.pkl"
         with open(output_path, 'wb') as f:
             pickle.dump(chunk, f)
             
@@ -136,8 +142,8 @@ def train_from_records():
 
     # Prepare Data
     ensure_dataset_exists()
-    train_files = list(dataset_dir.glob('chunk_*.pkl'))
-    test_files = list(dataset_dir.glob('test_chunk_*.pkl'))
+    train_files = list(train_dataset_dir.glob('chunk_*.pkl'))
+    test_files = list(test_dataset_dir.glob('chunk_*.pkl'))
     print(f"Found {len(train_files)} train files and {len(test_files)} test files.")
 
     # Load Model
@@ -156,7 +162,7 @@ def train_from_records():
     value_criterion = nn.MSELoss()
     
     # Scheduler
-    scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=SL_SCHEDULER_T0, T_mult=SL_SCHEDULER_TMULT)
+    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=SL_SCHEDULER_GAMMA)
 
     # Resume
     start_epoch = 0
@@ -229,8 +235,10 @@ def train_from_records():
                     wandb_log["test_value_loss"] = test_value_loss
                 wandb.log(wandb_log)
 
+            if (iter + 1) % SL_SCHEDULER_STEP_SIZE == 0:
+                scheduler.step()
+
             iter += 1
-            scheduler.step()
         
         avg_policy_loss = epoch_policy_loss / total_batches
         avg_value_loss = epoch_value_loss / total_batches
