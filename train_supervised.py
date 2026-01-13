@@ -178,7 +178,6 @@ def train_from_records():
             print(f"Resuming from epoch {start_epoch}")
 
     # Train Loop
-    iter = 0
     for epoch in range(start_epoch, SL_EPOCHS):
         print(f"Epoch {epoch + 1}/{SL_EPOCHS}")
         random.shuffle(train_files)
@@ -222,13 +221,6 @@ def train_from_records():
                 epoch_policy_loss += policy_loss.item()
                 epoch_value_loss += value_loss.item()
                 total_batches += 1
-            
-            # Test Evaluation
-            test_policy_loss, test_value_loss = 0.0, 0.0
-            if (iter + 1) % SL_TEST_INTERVAL == 0:
-                print(f"  Running test evaluation...")
-                test_policy_loss, test_value_loss = evaluate_on_test(model, test_files, device, value_criterion)
-                print(f"  Test Results - Policy Loss: {test_policy_loss:.4f} | Value Loss: {test_value_loss:.4f}")
 
             if USE_WANDB:
                 wandb_log = {
@@ -238,15 +230,19 @@ def train_from_records():
                     "total_loss": total_loss.item(),
                     "learning_rate": optimizer.param_groups[0]['lr']
                 }
-                if (iter + 1) % SL_TEST_INTERVAL == 0:
-                    wandb_log["test_policy_loss"] = test_policy_loss
-                    wandb_log["test_value_loss"] = test_value_loss
                 wandb.log(wandb_log)
 
-            if (iter + 1) % SL_SCHEDULER_STEP_SIZE == 0:
-                scheduler.step()
+        # Test Evaluation
+        print(f"  Running test evaluation...")
+        test_policy_loss, test_value_loss = evaluate_on_test(model, test_files, device, value_criterion)
+        print(f"  Test Results - Policy Loss: {test_policy_loss:.4f} | Value Loss: {test_value_loss:.4f}")
+        if USE_WANDB:
+            wandb.log({
+                "test_policy_loss": test_policy_loss,
+                "test_value_loss": test_value_loss
+            })
 
-            iter += 1
+        scheduler.step()
         
         avg_policy_loss = epoch_policy_loss / total_batches
         avg_value_loss = epoch_value_loss / total_batches
