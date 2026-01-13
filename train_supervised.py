@@ -196,6 +196,15 @@ def train_from_records():
             print(f"  Training on {len(dataset)} samples...")
             
             for batch_x, batch_y_policy, batch_y_value in tqdm(dataloader, leave=False):
+                # Data augmentation
+                k = random.randint(0, 3)
+                batch_x = batch_x.rot90(k, [2, 3])
+                batch_y_policy = batch_y_policy.view(-1, BOARD_WIDTH, BOARD_WIDTH).rot90(k, [1, 2]).view(-1, BOARD_WIDTH * BOARD_WIDTH)
+
+                if random.random() < 0.5:
+                    batch_x = batch_x.flip(3)
+                    batch_y_policy = batch_y_policy.view(-1, BOARD_WIDTH, BOARD_WIDTH).flip(2).view(-1, BOARD_WIDTH * BOARD_WIDTH)
+
                 batch_x = batch_x.to(device)
                 batch_y_policy = batch_y_policy.to(device)
                 batch_y_value = batch_y_value.to(device)
@@ -215,7 +224,7 @@ def train_from_records():
                 epoch_value_loss += value_loss.item()
                 total_batches += 1
             
-            # Evaluate after each file (User request: "test when one file training ends")
+            # Test Evaluation
             test_policy_loss, test_value_loss = 0.0, 0.0
             if (iter + 1) % SL_TEST_INTERVAL == 0:
                 print(f"  Running test evaluation...")
@@ -245,10 +254,8 @@ def train_from_records():
         
         print(f'Epoch {epoch + 1} Finished | Avg Train Policy: {avg_policy_loss:.4f} | Avg Train Value: {avg_value_loss:.4f}')
 
-        # Save Checkpoint
-        if (epoch + 1) % SL_CHECKPOINT_INTERVAL == 0:
-            save_checkpoint(epoch, model.state_dict(), optimizer.state_dict(), scheduler.state_dict())
-            print(f"Checkpoint saved at epoch {epoch + 1}")
+        save_checkpoint(epoch, model.state_dict(), optimizer.state_dict(), scheduler.state_dict())
+        print(f"Checkpoint saved at epoch {epoch + 1}")
             
         # Save Best Model (Overwrite)
         torch.save({'model_state_dict': model.state_dict()}, SL_MODEL_PATH)
