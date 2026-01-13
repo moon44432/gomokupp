@@ -286,28 +286,31 @@ async function startNewGame() {
     }
 }
 
-// Handle canvas click
-canvas.addEventListener('click', async (event) => {
+// Handle canvas pointer input (mouse + touch). Scaling fixes mobile offset issues.
+canvas.addEventListener('pointerdown', async (event) => {
     if (!gameActive) return;
-    
+    if (event.pointerType === 'mouse' && event.button !== 0) return; // only primary button
+
     const rect = canvas.getBoundingClientRect();
-    const clickX = event.clientX - rect.left;
-    const clickY = event.clientY - rect.top;
-    
-    const x = Math.round(clickX / CELL_SIZE - 0.5);
-    const y = Math.round(clickY / CELL_SIZE - 0.5);
-    
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    const canvasX = (event.clientX - rect.left) * scaleX;
+    const canvasY = (event.clientY - rect.top) * scaleY;
+
+    const x = Math.round(canvasX / CELL_SIZE - 0.5);
+    const y = Math.round(canvasY / CELL_SIZE - 0.5);
+
     if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE) return;
-    
-    // Check if position is empty
+
     const index = x + y * BOARD_SIZE;
     if (boardState[index] !== 0) {
         setMessage('이미 돌이 놓인 위치입니다', 'error');
         return;
     }
-    
+
     await makeMove(x, y);
-});
+}, { passive: true });
 
 // Make a move
 async function makeMove(x, y) {
