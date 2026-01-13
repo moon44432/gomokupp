@@ -1,4 +1,5 @@
 import xml.etree.ElementTree as etree
+import numpy as np
 from tqdm import tqdm
 
 from game import State, get_input_planes
@@ -33,6 +34,14 @@ def play(record):
     return history
 
 
+def rotate_90(mv):
+    return [BOARD_WIDTH * (mv_i % BOARD_WIDTH) + (BOARD_WIDTH - 1 - mv_i // BOARD_WIDTH) for mv_i in mv]
+
+
+def reflect_vertical(mv):
+    return [(BOARD_WIDTH - 1 - (mv_i % BOARD_WIDTH)) + BOARD_WIDTH * (mv_i // BOARD_WIDTH) for mv_i in mv]
+
+
 def generate_records_from_rif():
     '''
     Example of game record in .rif file:
@@ -54,16 +63,17 @@ def generate_records_from_rif():
             continue
         else:
             moves = move_str.split()
-            record_list.append(
-                ([BOARD_WIDTH * (BOARD_WIDTH - int(move[1:])) + ord(move[0]) - ord('a') for move in moves]
-                , winner)
-            )
-            cnt += 1
+            moves = [BOARD_WIDTH * (BOARD_WIDTH - int(move[1:])) + ord(move[0]) - ord('a') for move in moves]
+            for _ in range(4):
+                record_list.append((moves, winner))
+                moves = rotate_90(moves)
+                record_list.append((reflect_vertical(moves), winner))
+                cnt += 2
 
-        if cnt == MAX_DATA_LENGTH:
-            break
+            if cnt >= MAX_DATA_LENGTH:
+                break
 
-    return record_list
+    return record_list[:MAX_DATA_LENGTH]
 
 
 def generate_records_from_xml():
@@ -105,13 +115,14 @@ def generate_records_from_xml():
             continue
         else:
             moves = move_str.split()
-            record_list.append(
-                ([BOARD_WIDTH * (BOARD_WIDTH - int(move[1:])) + ord(move[0]) - ord('a') for move in moves]
-                , winner)
-            )
-            cnt += 1
+            moves = [BOARD_WIDTH * (BOARD_WIDTH - int(move[1:])) + ord(move[0]) - ord('a') for move in moves]
+            for _ in range(4):
+                record_list.append((moves, winner))
+                moves = rotate_90(moves)
+                record_list.append((reflect_vertical(moves), winner))
+                cnt += 2
 
-        if cnt == MAX_DATA_LENGTH:
+        if cnt >= MAX_DATA_LENGTH:
             break
 
-    return record_list
+    return record_list[:MAX_DATA_LENGTH]

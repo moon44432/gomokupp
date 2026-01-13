@@ -14,16 +14,16 @@ PREV_STATE_COUNT = 3
 RIF_DATABASE_PATH = 'training_data/renjunet_v10_20260105.rif'
 XML_DATABASE_PATH = 'training_data/games.xml'
 MAX_DATA_LENGTH = 150000
-GAME_LENGTH_THRES = 40
+GAME_LENGTH_THRES = 70
 
 # supervised_learning
 SL_DATASET_DIR = "./training_data/dataset"
-SL_CHUNK_SIZE = 25000
+SL_CHUNK_SIZE = 40000
 SL_CHECKPOINT_FILE = "train_supervised_checkpoint.json"
 SL_MODEL_PATH = "./model/best_supervised.pth"
 SL_CHECKPOINT_INTERVAL = 5
 SL_EPOCHS = 50
-SL_LEARNING_RATE = 0.01
+SL_LEARNING_RATE = 0.001
 SL_SCHEDULER_GAMMA = 0.9
 SL_SCHEDULER_STEP_SIZE = 50
 SL_BATCH_SIZE = 512

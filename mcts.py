@@ -9,7 +9,7 @@ from network import input_shape
 
 class ModelServer:
     """Shared model server for efficient batch prediction"""
-    def __init__(self, model_path, device='cpu', batch_size=8):
+    def __init__(self, model_path, device='cpu', batch_size=16):
         from network import load_model
         self.model = load_model(model_path)
         self.device = torch.device(device)
