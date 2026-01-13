@@ -39,7 +39,7 @@ def new_game():
     use_renju = data.get('use_renju', True)  # 렌주룰 사용 여부
     use_ai = data.get('use_ai', True)  # AI 사용 여부
     mcts_count = int(data.get('mcts_count', PLAY_MCTS_COUNT))
-    mcts_count = max(200, min(1000, mcts_count))
+    mcts_count = max(400, min(1200, mcts_count))
     
     session_id = str(len(game_sessions))
     
@@ -156,7 +156,7 @@ def reset_game():
     use_renju = data.get('use_renju', True)
     use_ai = data.get('use_ai', True)
     mcts_count = int(data.get('mcts_count', PLAY_MCTS_COUNT))
-    mcts_count = max(200, min(1000, mcts_count))
+    mcts_count = max(400, min(1200, mcts_count))
     
     if session_id not in game_sessions:
         return jsonify({'error': 'Invalid session'}), 400

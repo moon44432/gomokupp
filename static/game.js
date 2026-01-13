@@ -224,7 +224,7 @@ async function startNewGame() {
     useAI = useAICheckbox.checked;
     syncWinrateVisibility();
 
-    const mctsCount = clampInt(parseInt(difficultySlider.value, 10), 200, 1000);
+    const mctsCount = clampInt(parseInt(difficultySlider.value, 10), 400, 1200);
     
     try {
         const response = await fetch('/api/new_game', {
@@ -457,7 +457,7 @@ function clampInt(value, min, max) {
 }
 
 function syncDifficultyUI() {
-    const mctsCount = clampInt(parseInt(difficultySlider.value, 10), 200, 1000);
+    const mctsCount = clampInt(parseInt(difficultySlider.value, 10), 400, 1200);
     difficultySlider.value = mctsCount;
     difficultyValue.textContent = String(mctsCount);
     difficultySlider.disabled = !useAICheckbox.checked;
