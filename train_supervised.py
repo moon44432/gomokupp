@@ -199,12 +199,11 @@ def train_from_records():
                 # Data augmentation
                 k = random.randint(0, 3)
                 batch_x = batch_x.rot90(k, [2, 3])
-                batch_y_policy = batch_y_policy.view(-1, BOARD_WIDTH, BOARD_WIDTH).rot90(k, [1, 2]).view(-1, BOARD_WIDTH * BOARD_WIDTH)
+                batch_y_policy = batch_y_policy.reshape(-1, BOARD_WIDTH, BOARD_WIDTH).rot90(k, [1, 2]).reshape(-1, BOARD_WIDTH * BOARD_WIDTH)
 
                 if random.random() < 0.5:
                     batch_x = batch_x.flip(3)
-                    batch_y_policy = batch_y_policy.view(-1, BOARD_WIDTH, BOARD_WIDTH).flip(2).view(-1, BOARD_WIDTH * BOARD_WIDTH)
-
+                    batch_y_policy = batch_y_policy.reshape(-1, BOARD_WIDTH, BOARD_WIDTH).flip(2).reshape(-1, BOARD_WIDTH * BOARD_WIDTH)
                 batch_x = batch_x.to(device)
                 batch_y_policy = batch_y_policy.to(device)
                 batch_y_value = batch_y_value.to(device)
