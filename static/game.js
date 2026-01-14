@@ -218,6 +218,7 @@ async function startNewGame() {
     forbiddenMoves = [];  // Reset forbidden moves
     winrateHistory = [];
     clearWinrateChart();
+    setBoardEnabled(false);
     
     // Get checkbox states
     useRenju = useRenjuCheckbox.checked;
@@ -245,7 +246,6 @@ async function startNewGame() {
         if (response.ok) {
             sessionId = data.session_id;
             boardState = data.board;
-            gameActive = true;
             forbiddenMoves = data.forbidden_moves || [];
             
             // Set initial turn
@@ -269,9 +269,12 @@ async function startNewGame() {
             }
             
             drawBoard(boardState, moveHistory, forbiddenMoves);
-            canvas.classList.remove('disabled');
             newGameBtn.disabled = false;
             updateGameInfo();
+
+            const playerTurn = !useAI || currentTurn === playerColor;
+            const enableBoard = !data.is_done && playerTurn;
+            setBoardEnabled(enableBoard);
             
             if (data.is_done) {
                 handleGameEnd(data.winner);
@@ -314,8 +317,7 @@ canvas.addEventListener('pointerdown', async (event) => {
 
 // Make a move
 async function makeMove(x, y) {
-    gameActive = false;
-    canvas.classList.add('disabled');
+    setBoardEnabled(false);
     
     // Determine whose turn it is
     const currentPlayerColorNum = currentTurn === 'black' ? 1 : 2;
@@ -368,8 +370,7 @@ async function makeMove(x, y) {
                     return;
                 }
 
-                gameActive = true;
-                canvas.classList.remove('disabled');
+                setBoardEnabled(true);
                 return;
             }
 
@@ -386,24 +387,21 @@ async function makeMove(x, y) {
                 currentTurn = currentTurn === 'black' ? 'white' : 'black';
                 drawBoard(boardState, moveHistory, forbiddenMoves);
                 updateGameInfo();
-                gameActive = true;
-                canvas.classList.remove('disabled');
+                setBoardEnabled(true);
             }
         } else {
             // If move was invalid, remove it from history
             moveHistory.pop();
             drawBoard(boardState, moveHistory, forbiddenMoves);
             setMessage('잘못된 수입니다: ' + data.error, 'error');
-            gameActive = true;
-            canvas.classList.remove('disabled');
+            setBoardEnabled(true);
         }
     } catch (error) {
         // If error occurred, remove the move from history
         moveHistory.pop();
         drawBoard(boardState, moveHistory, forbiddenMoves);
         setMessage('서버 연결 오류: ' + error.message, 'error');
-        gameActive = true;
-        canvas.classList.remove('disabled');
+        setBoardEnabled(true);
     } finally {
         hideThinkingMessage();
     }
@@ -411,8 +409,7 @@ async function makeMove(x, y) {
 
 // Handle game end
 function handleGameEnd(winner) {
-    gameActive = false;
-    canvas.classList.add('disabled');
+    setBoardEnabled(false);
     newGameBtn.disabled = false;
     
     if (winner === 'draw') {
@@ -452,6 +449,15 @@ function hideThinkingMessage() {
 function setMessage(text, type = 'info') {
     message.textContent = text;
     message.className = 'message ' + type;
+}
+
+function setBoardEnabled(enabled) {
+    gameActive = enabled;
+    if (enabled) {
+        canvas.classList.remove('disabled');
+    } else {
+        canvas.classList.add('disabled');
+    }
 }
 
 function clampInt(value, min, max) {
