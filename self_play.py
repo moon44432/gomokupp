@@ -1,13 +1,14 @@
 import torch
 import numpy as np
-import multiprocessing
+import threading
+import concurrent.futures
 from tqdm import tqdm
 
 from game import State, get_input_planes
 from mcts import pv_mcts_scores, ModelServer
 from network import output_size
 from generate_data import first_player_value, write_data
-from hparams import RL_TEMP, RL_GAME_CNT, RL_CORES, RL_MCTS_CNT
+from hparams import RL_TEMP, RL_GAME_CNT, RL_CORES, RL_MCTS_COUNT
 
 
 def play(model_server, rule):
@@ -19,7 +20,7 @@ def play(model_server, rule):
         if state.is_done():
             break
 
-        scores = pv_mcts_scores(model_server, RL_MCTS_CNT, state, RL_TEMP)
+        scores = pv_mcts_scores(model_server, state, RL_TEMP, RL_MCTS_COUNT)
 
         policies = [0] * output_size
         for action, policy in zip(state.legal_actions(), scores):
@@ -40,38 +41,46 @@ def play(model_server, rule):
 
 
 def do_self_play(args):
-    """Worker function for self-play with shared model server"""
-    num, model_path, rule = args
-    
-    # Create a model server for this worker
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    model_server = ModelServer(model_path, device=device, batch_size=8)
-    
+    """Worker function for self-play"""
+    model_server, rule, cnt, pbar = args
     history = []
-    cnt = int(RL_GAME_CNT / RL_CORES)
     
-    for _ in tqdm(range(cnt), position=num, desc=f"Worker {num}"):
+    for _ in range(cnt):
         h = play(model_server, rule)
         history.extend(h)
-    
-    model_server.close()
+        # Update progress bar safely
+        with pbar.get_lock():
+            pbar.update(1)
+            
     return history
 
 
 def self_play(rule=None):
-    """Main self-play function using optimized parallelization"""
+    """Main self-play function using threading and shared ModelServer"""
     model_path = './model/best.pth'
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
-    # Prepare arguments for workers
-    worker_args = [(i, model_path, rule) for i in range(RL_CORES)]
+    # Initialize shared model server
+    # Adjust batch_size as needed. 16 ~ 32 is usually good.
+    model_server = ModelServer(model_path, device=device, batch_size=16)
     
-    # Use multiprocessing pool
-    with multiprocessing.Pool(processes=RL_CORES) as pool:
-        history_list = pool.map(do_self_play, worker_args)
+    total_games = RL_GAME_CNT
+    num_threads = RL_CORES
+    games_per_thread = total_games // num_threads
+    
+    # Use a shared tqdm progress bar
+    with tqdm(total=total_games, desc="Self Play") as pbar:
+        # Prepare arguments: (server, rule, count, pbar)
+        worker_args = [(model_server, rule, games_per_thread, pbar) for _ in range(num_threads)]
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+            game_histories = list(executor.map(do_self_play, worker_args))
+    
+    model_server.close()
     
     # Combine all histories
     history = []
-    for h in history_list:
+    for h in game_histories:
         history += h
 
     write_data(history, 'sp')

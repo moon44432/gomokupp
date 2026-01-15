@@ -2,10 +2,13 @@ import torch
 import numpy as np
 import queue
 import threading
+import concurrent.futures
 from math import sqrt
 
 from game import get_input_planes
 from network import input_shape
+from hparams import MCTS_VIRTUAL_LOSS, MCTS_NUM_THREADS
+
 
 class ModelServer:
     """Shared model server for efficient batch prediction"""
@@ -125,61 +128,103 @@ def nodes_to_scores(nodes):
         scores.append(c.n)
     return scores
 
+class Node:
+    def __init__(self, state, p):
+        self.state = state
+        self.p = p
+        self.w = 0.0
+        self.n = 0
+        self.child_nodes = None
+        self.lock = threading.Lock()
 
-def pv_mcts_scores(model, state, temperature, eval_cnt):
-    class Node:
-        def __init__(self, state, p):
-            self.state = state
-            self.p = p
-            self.w = 0
-            self.n = 0
-            self.child_nodes = None
-
-        def evaluate(self):
-            if self.state.is_done():
-                if self.state.is_lose():
-                    value = -1
-                elif self.state.is_forbidden_move():
-                    value = 1
-                else:
-                    value = 0
-
+    def evaluate(self, model):
+        if self.state.is_done():
+            if self.state.is_lose():
+                value = -1
+            elif self.state.is_forbidden_move():
+                value = 1
+            else:
+                value = 0
+            
+            with self.lock:
                 self.w += value
                 self.n += 1
-                return value
+            return value
 
-            if not self.child_nodes:
-                policies, value = predict(model, self.state)
+        # Check for children with lock
+        with self.lock:
+            has_children = self.child_nodes is not None
 
+        if not has_children:
+            policies, value = predict(model, self.state)
+
+            with self.lock:
                 self.w += value
                 self.n += 1
-
                 self.child_nodes = []
                 for action, policy in zip(self.state.legal_actions(), policies):
                     self.child_nodes.append(Node(self.state.next(action), policy))
-                return value
+            return value
 
-            else:
-                value = -self.next_child_node().evaluate()
+        else:
+            # Standard PUCT selection
+            C_PUCT = 1.5
+            with self.lock:
+                # Calculate scores for all children
+                t = sum(c.n for c in self.child_nodes)
+                # Optimization: pre-calculate sqrt(t)
+                sqrt_t = sqrt(t)
+                
+                best_value = -float('inf')
+                best_child = None
+                
+                for child in self.child_nodes:
+                    q = -child.w / child.n if child.n else 0.0
+                    u = C_PUCT * child.p * sqrt_t / (1 + child.n)
+                    score = q + u
+                    
+                    if score > best_value:
+                        best_value = score
+                        best_child = child
+                
+                # Apply Virtual Loss
+                with best_child.lock:
+                    best_child.n += MCTS_VIRTUAL_LOSS
+                    best_child.w += MCTS_VIRTUAL_LOSS
 
+            # Evaluate child (Recursive)
+            value = -best_child.evaluate(model)
+
+            # Remove Virtual Loss
+            with best_child.lock:
+                best_child.n -= MCTS_VIRTUAL_LOSS
+                best_child.w -= MCTS_VIRTUAL_LOSS
+
+            # Update self
+            with self.lock:
                 self.w += value
                 self.n += 1
-                return value
+                
+            return value
 
-        def next_child_node(self):
-            C_PUCT = 1.5
-            t = sum(nodes_to_scores(self.child_nodes))
-            pucb_values = []
-            for child_node in self.child_nodes:
-                pucb_values.append((-child_node.w / child_node.n if child_node.n else 0.0) +
-                                   C_PUCT * child_node.p * sqrt(t) / (1 + child_node.n))
-
-            return self.child_nodes[np.argmax(pucb_values)]
-
+def pv_mcts_scores(model, state, temperature, eval_cnt):
     root_node = Node(state, 0)
+    
+    # Use thread pool to parallelize MCTS
+    num_threads = MCTS_NUM_THREADS
+    iters_per_thread = (eval_cnt + num_threads - 1) // num_threads
 
-    for _ in range(eval_cnt):
-        root_node.evaluate()
+    def worker(iterations):
+        for _ in range(iterations):
+            root_node.evaluate(model)
+
+    # If eval_cnt is small, or just 1 thread, don't submit overhead
+    if num_threads <= 1 or eval_cnt < num_threads:
+        worker(eval_cnt)
+    else:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+            futures = [executor.submit(worker, iters_per_thread) for _ in range(num_threads)]
+            concurrent.futures.wait(futures)
 
     scores = nodes_to_scores(root_node.child_nodes)
 
