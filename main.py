@@ -43,7 +43,7 @@ if __name__ == '__main__':
     print(f'Using device: {device}')
     
     # Create model server for efficient inference
-    model_server = ModelServer('./model/best.pth', device=device, batch_size=8)
+    model_server = ModelServer('./model/best.pth', device=device)
 
     # 게임 UI 실행
     f = Game(model_server=model_server, rule=Renju())

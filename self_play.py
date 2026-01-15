@@ -62,7 +62,7 @@ def self_play(rule=None):
     
     # Initialize shared model server
     # Adjust batch_size as needed. 16 ~ 32 is usually good.
-    model_server = ModelServer(model_path, device=device, batch_size=16)
+    model_server = ModelServer(model_path, device=device)
     
     total_games = RL_GAME_CNT
     num_threads = RL_CORES

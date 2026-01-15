@@ -43,8 +43,8 @@ def do_evaluate(args):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     # Create model servers for batch inference
-    model_server0 = ModelServer(latest_path, device=device, batch_size=8)
-    model_server1 = ModelServer(best_path, device=device, batch_size=8)
+    model_server0 = ModelServer(latest_path, device=device)
+    model_server1 = ModelServer(best_path, device=device)
 
     next_action0 = pv_mcts_action(model_server0, EN_MCTS_COUNT, EN_TEMPERATURE)
     next_action1 = pv_mcts_action(model_server1, EN_MCTS_COUNT, EN_TEMPERATURE)

@@ -23,7 +23,7 @@ def initialize_model():
     global model_server, device
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'Using device: {device}')
-    model_server = ModelServer('./model/best_supervised.pth', device=device, batch_size=8)
+    model_server = ModelServer('./model/best_supervised.pth', device=device)
 
 
 @app.route('/')
