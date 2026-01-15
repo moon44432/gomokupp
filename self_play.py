@@ -8,7 +8,7 @@ from game import State, get_input_planes
 from mcts import pv_mcts_scores, ModelServer
 from network import output_size
 from generate_data import first_player_value, write_data
-from hparams import RL_TEMP, RL_GAME_CNT, RL_CORES, RL_MCTS_COUNT
+from hparams import RL_TEMP, RL_GAME_COUNT, RL_CORES, RL_MCTS_COUNT
 
 
 def play(model_server, rule):
@@ -64,7 +64,7 @@ def self_play(rule=None):
     # Adjust batch_size as needed. 16 ~ 32 is usually good.
     model_server = ModelServer(model_path, device=device, batch_size=16)
     
-    total_games = RL_GAME_CNT
+    total_games = RL_GAME_COUNT
     num_threads = RL_CORES
     games_per_thread = total_games // num_threads
     
