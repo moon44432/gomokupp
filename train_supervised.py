@@ -158,7 +158,8 @@ def train_from_records():
     model.train()
 
     # Optimizer
-    optimizer = optim.AdamW(model.parameters(), lr=SL_LEARNING_RATE, weight_decay=1e-4)
+    # AlphaGo Zero used SGD with momentum 0.9 and weight decay 1e-4
+    optimizer = optim.SGD(model.parameters(), lr=SL_LEARNING_RATE, momentum=0.9, weight_decay=1e-4)
     value_criterion = nn.MSELoss()
     
     # Scheduler
